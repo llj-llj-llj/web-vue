@@ -39,11 +39,21 @@ export async function getCourseItemOptionList(): Promise<OptionItem[]> {
 //获取成绩列表后台数据请求方法
 export async function getScoreList(
   personId: number | null,
-  courseId: number | null
+  courseId: number | null,
+  currentPage: number = 1,
+  pageSize: number = 10,
+  sortBy: string = '',
+  sortDesc: boolean = false,
+  examType: string | null = null
 ): Promise<[]> {
   const res = await generalRequest("/api/score/getScoreList", {
     personId: personId,
     courseId: courseId,
+    currentPage: currentPage,
+    pageSize: pageSize,
+    sortBy: sortBy,
+    sortDesc: sortDesc,
+    examType: examType
   });
   return res.data as [];
 }
