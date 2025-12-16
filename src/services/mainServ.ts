@@ -12,8 +12,10 @@ export async function getMenuList(): Promise<MenuInfo[]> {
 }
 //获取验证码后台数据请求方法
 export async function getValidateCode(): Promise<ValidateCode> {
+  //意思是：这个函数最终会返回一个 ValidateCode（但因为要请求网络，所以是异步，用 Promise 包一层）。
   const res = await generalRequest("/auth/getValidateCode", null);
-  return res.data as ValidateCode;
+  // 兼容 generalRequest 是否已解包
+  return (res.data?.data ?? res.data) as ValidateCode;
 }
 //后台检验验证码数据请求方法
 export function testValidateInfo(data: Object): Promise<DataResponse> {
