@@ -343,14 +343,15 @@ export default defineComponent({
     //用户注册 请求后台服务，将用户注册信息发送到后台，后台添加账户人员教师或学生信息
     async register() {
       let res = await testValidateInfo({
-        validateCodeId: this.id,
-        validateCode: this.valiCode,
+        validateCodeId: this.id,//告诉后端：你校验的是哪一张验证码
+        validateCode: this.valiCode,//用户再输入框里输入的验证码
       });
-      if (res.code != 0) {
-        message(this, res.msg);
-        this.changeValiCode();
+      if (res.code != 0) {//如果验证码错误
+        message(this, res.msg);//提示错误
+        this.changeValiCode();//换一张新验证码
         return;
       }
+      //前端表单检验
       if (this.username == "" || this.username == undefined) {
         message(this, "账号为空,请填写账号");
         return;
