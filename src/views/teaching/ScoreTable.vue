@@ -159,8 +159,8 @@
       position: absolute;
       top: 300px;
       left: 300px;
-      width: 300px;
-      height: 210px;
+      width: 350px;
+      height: 280px;
     ">
     <div class="base_title">成绩添加修改对话框</div>
     <div class="dialog-div" style="margin-top: 5px">
@@ -198,19 +198,37 @@
           </td>
         </tr>
         <tr>
+          <td colspan="1" style="text-align: right">考试类型</td>
+          <td colspan="1">
+            <select 
+              class="commInput" 
+              v-model="editedItem.examType"
+              @change="validateExamType"
+            >
+              <option value="">请选择...</option>
+              <option value="期中考试">期中考试</option>
+              <option value="期末考试">期末考试</option>
+              <option value="平时成绩">平时成绩</option>
+              <option value="模拟考试">模拟考试</option>
+            </select>
+            <div v-if="validationErrors.examType" class="error-message">{{ validationErrors.examType }}</div>
+          </td>
+        </tr>
+        <tr>
         <td colspan="1" style="text-align: right">成绩</td>
-        <td colspan="1">
-          <input 
-            :value="editedItem.mark" 
-            class="commInput" 
-            @input="handleMarkInput" 
-            type="number"
-            step="0.1"
-            min="0"
-            max="100"
-          />
-          <div v-if="validationErrors.mark" class="error-message">{{ validationErrors.mark }}</div>
-        </td>
+          <td colspan="1">
+            <input 
+              :value="editedItem.mark" 
+              class="commInput" 
+              @input="handleMarkInput" 
+              type="number"
+              step="0.1"
+              min="0"
+              max="100"
+            />
+            <div v-if="validationErrors.mark" class="error-message">{{ validationErrors.mark }}</div>
+            <div v-if="validationErrors.duplicate" class="error-message">{{ validationErrors.duplicate }}</div>
+          </td>
       </tr>
         <tr>
           <td colspan="2">
@@ -239,6 +257,7 @@ import {
   getCourseItemOptionList,
   scoreSave,
   scoreDelete,
+  generateScoreReport,
 } from "~/services/teachingServ";
 import { type OptionItem, type ScoreItem as BaseScoreItem } from "~/models/general";
 
@@ -263,6 +282,7 @@ export default defineComponent({
   },
   data: () => ({
     scoreList: [] as ScoreItem[],
+    allScoresList: [] as ScoreItem[], // 存储完整数据集用于校验和分析
     personId: null,
     courseId: null,
     editedItem: {} as ScoreItem,
@@ -294,7 +314,9 @@ export default defineComponent({
     validationErrors: {
       mark: '',
       personId: '',
-      courseId: ''
+      courseId: '',
+      examType: '',
+      duplicate: ''
     },
     // 成绩分析相关
     userRole: '',
@@ -337,14 +359,19 @@ export default defineComponent({
       // 验证所有必填项和成绩
       this.validatePersonId();
       this.validateCourseId();
+      this.validateExamType();
       this.validateMark(); // 成绩现在是必填项，总是验证
+      this.validateDuplicate(); // 重复性检查
       
       // 只有当所有必填项都已选择且没有验证错误时，表单才有效
       return !this.validationErrors.personId && 
              !this.validationErrors.courseId && 
+             !this.validationErrors.examType &&
              !this.validationErrors.mark && 
+             !this.validationErrors.duplicate &&
              (this.editedItem.personId && this.editedItem.personId != 0) && 
-             (this.editedItem.courseId && this.editedItem.courseId != 0);
+             (this.editedItem.courseId && this.editedItem.courseId != 0) &&
+             (this.editedItem.examType && this.editedItem.examType.trim() !== '');
     }
   },
   created() {
@@ -421,6 +448,8 @@ export default defineComponent({
       } else {
         this.validationErrors.personId = '';
       }
+      // 学生变化时检查重复性
+      this.validateDuplicate();
     },
     // 验证课程选择是否必填
     validateCourseId() {
@@ -428,6 +457,42 @@ export default defineComponent({
         this.validationErrors.courseId = '请选择课程';
       } else {
         this.validationErrors.courseId = '';
+      }
+      // 课程变化时检查重复性
+      this.validateDuplicate();
+    },
+    // 验证考试类型是否必填
+    validateExamType() {
+      if (!this.editedItem.examType || this.editedItem.examType.trim() === '') {
+        this.validationErrors.examType = '请选择考试类型';
+      } else {
+        this.validationErrors.examType = '';
+      }
+      // 考试类型变化时检查重复性
+      this.validateDuplicate();
+    },
+    // 验证成绩是否重复
+    validateDuplicate() {
+      // 必须先有学生、课程和考试类型才能检查重复
+      if (!this.editedItem.personId || this.editedItem.personId === 0 ||
+          !this.editedItem.courseId || this.editedItem.courseId === 0 ||
+          !this.editedItem.examType) {
+        this.validationErrors.duplicate = '';
+        return;
+      }
+      
+      // 查找是否存在重复记录（使用完整数据集）
+      const exists = this.allScoresList.find(item => 
+        item.personId === this.editedItem.personId &&
+        item.courseId === this.editedItem.courseId &&
+        item.examType === this.editedItem.examType &&
+        item.scoreId !== this.editedItem.scoreId // 排除编辑时的自身记录
+      );
+      
+      if (exists) {
+        this.validationErrors.duplicate = '该学生在此课程的此考试类型已存在成绩';
+      } else {
+        this.validationErrors.duplicate = '';
       }
     },
     // 查询
@@ -445,6 +510,8 @@ export default defineComponent({
         );
         // 正确处理API返回的直接数组
         const allScores = res || [];
+        // 存储完整数据集用于校验和分析
+        this.allScoresList = [...allScores];
         // 设置总数据量
         this.pagination.dataTotal = allScores.length;
         
@@ -466,21 +533,30 @@ export default defineComponent({
     },
     // 添加成绩,显示成绩修改对画框
     addItem() {
-      this.editedItem = { personId: 0, courseId: 0 } as ScoreItem;
+      this.editedItem = { 
+        personId: 0, 
+        courseId: 0, 
+        examType: '期末考试',
+        mark: 0
+      } as ScoreItem;
       // 清空验证错误信息
       this.validationErrors.mark = '';
       this.validationErrors.personId = '';
       this.validationErrors.courseId = '';
+      this.validationErrors.examType = '';
+      this.validationErrors.duplicate = '';
       const dialog = document.getElementById("favDialog") as HTMLDialogElement;
       dialog.show();
     },
     // 编辑成绩,显示成绩修改对画框
     editItem(item: ScoreItem) {
-      this.editedItem = item;
+      this.editedItem = { ...item };
       // 清空验证错误信息
       this.validationErrors.mark = '';
       this.validationErrors.personId = '';
       this.validationErrors.courseId = '';
+      this.validationErrors.examType = '';
+      this.validationErrors.duplicate = '';
       const dialog = document.getElementById("favDialog") as HTMLDialogElement;
       dialog.show();
     },
@@ -494,10 +570,16 @@ export default defineComponent({
       // 进行最终验证
       this.validatePersonId();
       this.validateCourseId();
+      this.validateExamType();
       this.validateMark();
+      this.validateDuplicate();
       
       // 检查是否有验证错误
-      if (this.validationErrors.personId || this.validationErrors.courseId || this.validationErrors.mark) {
+      if (this.validationErrors.personId || 
+          this.validationErrors.courseId || 
+          this.validationErrors.examType ||
+          this.validationErrors.mark || 
+          this.validationErrors.duplicate) {
         ElMessage.warning("请检查表单填写是否正确");
         return;
       }
@@ -510,7 +592,8 @@ export default defineComponent({
           this.editedItem.scoreId || 0,
           this.editedItem.personId,
           this.editedItem.courseId,
-          this.editedItem.mark
+          this.editedItem.mark,
+          this.editedItem.examType
         );
         if (res.code == 0) {
           ElMessage.success("保存成功");
@@ -807,18 +890,12 @@ export default defineComponent({
           }
         }
         
-        // 准备请求参数
-        const params = {
-          personId: this.personId || null,
-          courseId: this.courseId || null,
-          examType: this.examType || null
-        };
-        
         // 调用后台接口生成并下载PDF
-        const res = await downloadPost(
-          '/api/teaching/generateScoreReport',
-          fileName,
-          params
+        const res = await generateScoreReport(
+          this.personId || null,
+          this.courseId || null,
+          this.examType || null,
+          fileName
         );
         
         if (res) {

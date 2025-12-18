@@ -1,4 +1,4 @@
-import { generalRequest, uploadRequest } from "~/services/genServ";
+import { generalRequest, uploadRequest, downloadPost } from "~/services/genServ";
 import {
   type DataResponse,
   type CourseItem,
@@ -62,13 +62,15 @@ export async function scoreSave(
   scoreId: number | null,
   personId: number,
   courseId: number,
-  mark: number
+  mark: number,
+  examType?: string
 ): Promise<DataResponse> {
   const res = await generalRequest("/api/score/scoreSave", {
     scoreId: scoreId,
     personId: personId,
     courseId: courseId,
     mark: mark,
+    examType: examType,
   });
   return res as DataResponse;
 }
@@ -78,4 +80,19 @@ export async function scoreDelete(scoreId: number): Promise<DataResponse> {
     scoreId: scoreId,
   });
   return res as DataResponse;
+}
+
+//生成成绩报告单PDF后台数据请求方法
+export async function generateScoreReport(
+  personId: number | null,
+  courseId: number | null,
+  examType: string | null,
+  fileName: string
+): Promise<any> {
+  const params = {
+    personId: personId,
+    courseId: courseId,
+    examType: examType
+  };
+  return await downloadPost('/api/teaching/generateScoreReport', fileName, params);
 }
