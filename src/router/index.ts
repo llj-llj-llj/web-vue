@@ -82,6 +82,11 @@ const routes = [
     component: () => import("~/views/teaching/CourseTable.vue"),
   },
   {
+    path: "/MyCourse",
+    name: "MyCourseTable",
+    component: () => import("~/views/teaching/MyCourseTable.vue"),
+  },
+  {
     path: "/Score",
     name: "ScoreTable",
     component: () => import("~/views/teaching/ScoreTable.vue"),

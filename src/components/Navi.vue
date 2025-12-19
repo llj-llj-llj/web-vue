@@ -162,11 +162,12 @@ export default defineComponent({
   unmounted() {
     clearInterval(this.timer);
   },
+
   // 计算属性 用于计算属性，计算属性的结果会被缓存，除非依赖的响应式属性变化才会重新计算 当用户信息和菜单更新后页面会重新显然，显示主界面
   computed: {
     ...mapState(useAppStore, ["systemConfig"]),
     ...mapState(useAppStore, ["userInfo"]),
-  },
+  }, 
   methods: {
     // 退出登录
     logout() {
