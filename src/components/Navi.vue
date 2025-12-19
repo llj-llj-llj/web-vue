@@ -137,7 +137,7 @@ export default defineComponent({
     currentTime: formatTime(new Date()),
   }),
   //生命周期函数  mounted() 在实例挂载之后调用， 设置定期刷新控制台时间
-  /**mounted() {
+ mounted() {
     if (this.timer) {
       clearInterval(this.timer);
     } else {
@@ -157,26 +157,10 @@ export default defineComponent({
     } else {
       router.push({ path: "/Login" });
     }
-  },**/
+  },
 
   
-  mounted() {
-  const store = useAppStore();
 
-  // ======【开发阶段：强制伪造已登录状态】======
-  if (!store.userInfo.username) {
-    store.userInfo.username = "admin";
-    store.userInfo.perName = "管理员";
-    store.userInfo.role = "ROLE_ADMIN";
-  }
-
-  if (!store.systemConfig.showLeftMeun) {
-    store.systemConfig.showLeftMeun = true;
-  }
-  // ============================================
-
-  // 下面原来的逻辑可以暂时注释掉，或者保留都行
-},
 
 
   // 生命周期函数  unmounted() 在实例销毁之后调用，清除定期刷新控制台时间

@@ -5,7 +5,7 @@ const routes = [
   //当路由为空时，重定向到登录页面
   {
     path: "/",
-    redirect: "/StudentLeave",
+    redirect: "/Login",
   },
   //登录页面
   {
