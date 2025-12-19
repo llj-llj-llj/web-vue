@@ -5,7 +5,7 @@ const routes = [
   //当路由为空时，重定向到登录页面
   {
     path: "/",
-    redirect: "/Login",
+    redirect: "/StudentLeave",
   },
   //登录页面
   {
@@ -49,7 +49,6 @@ const routes = [
     name: "DictionaryManage",
     component: () => import("~/views/system/DictionaryManage.vue"),
   },
-
   {
     path: "/Student",
     name: "StudentTable",
@@ -59,6 +58,11 @@ const routes = [
     path: "/StudentInfo",
     name: "StudentInfo",
     component: () => import("~/views/person/StudentInfo.vue"),
+  },
+  {
+    path: "/StudentLeave",
+    name: "StudentLeave",
+    component: () => import("~/views/person/StudentLeave.vue"),
   },
   {
     path: "/FamilyMember",
@@ -91,6 +95,11 @@ const routes = [
     name: "ScoreTable",
     component: () => import("~/views/teaching/ScoreTable.vue"),
   },
+  /**{
+    path: "/Studentleave",
+    name: "Studentleave",
+    component: () => import("~/views/person/TeacherInfo.vue"),
+  },**/
 ];
 //路由创建
 const router = createRouter({

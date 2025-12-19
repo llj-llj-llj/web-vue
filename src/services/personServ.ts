@@ -86,7 +86,7 @@ export async function getTeacherInfo(
 }
 //保存教师基本信息后台数据请求方法
 export async function teacherEditSave(
-  teracherId: number,
+  personId: number,
   form: TeacherItem
 ): Promise<DataResponse> {
   const res = await generalRequest("/api/teacher/teacherEditSave", {
