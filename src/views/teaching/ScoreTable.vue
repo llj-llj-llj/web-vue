@@ -2,34 +2,46 @@
   <div class="base_form" v-loading="loading.query" element-loading-text="查询中...">
     <div class="base_header">
       <div class="blue_column"></div>
-      <div class="base_title">课程管理</div>
+      <div class="base_title">{{ isStudent ? '我的成绩' : '成绩管理' }}</div>
     </div>
 
     <div class="base_query_oneLine">
       <div class="query_left">
-        <button class="commButton" @click="addItem()">添加</button>
+        <!-- 只有教师和管理员可以添加成绩 -->
+        <button v-if="!isStudent" class="commButton" @click="addItem()">添加</button>
+        <!-- 只有教师和管理员可以批量导入 -->
         <input 
+          v-if="!isStudent"
           style="margin-left: 10px" 
           type="file" 
           id="file" 
           accept=".xlsx,.xls" 
           @change="handleFileChange" 
         />
-        <button class="commButton" @click="uploadExcel" :disabled="loading.upload">
+        <button 
+          v-if="!isStudent" 
+          class="commButton" 
+          @click="uploadExcel" 
+          :disabled="loading.upload"
+        >
           {{ loading.upload ? '导入中...' : '批量导入' }}
         </button>
+        <!-- 所有角色都可以生成成绩单，但学生只能生成自己的 -->
         <button class="commButton" @click="generateReportCard" :disabled="loading.query">
-          {{ loading.query ? '生成中...' : '生成成绩单' }}
+          {{ loading.query ? '生成中...' : (isStudent ? '生成我的成绩单' : '生成成绩单') }}
         </button>
       </div>
       <div class="query_right">
-        <span style="margin-top: 5px">学生</span>
-        <select class="commInput" v-model="personId">
-          <option value="0">请选择...</option>
-          <option v-for="item in studentList" :key="item.id" :value="item.id">
-            {{ item.title }}
-          </option>
-        </select>
+        <!-- 教师和管理员可以选择学生 -->
+        <div v-if="!isStudent" style="display: flex; align-items: center;">
+          <span style="margin-top: 5px">学生</span>
+          <select class="commInput" v-model="personId">
+            <option value="0">请选择...</option>
+            <option v-for="item in studentList" :key="item.id" :value="item.id">
+              {{ item.title }}
+            </option>
+          </select>
+        </div>
         <span style="margin-top: 5px">课程</span>
         <select class="commInput" v-model="courseId">
           <option value="0">请选择...</option>
@@ -53,24 +65,24 @@
     <div class="table_center" style="margin-top: 5px">
       <table class="content">
         <tr class="table_th">
-          <td>学号</td>
-          <td>姓名</td>
-          <td>班级</td>
-          <td>课程号</td>
+          <td v-if="!isStudent">学号</td>
+          <td>{{ isStudent ? '我的' : '学生' }}姓名</td>
+          <td v-if="!isStudent">班级</td>
+          <td v-if="!isStudent">课程号</td>
           <td @click="handleSort('courseName')">课程名</td>
           <td>学分</td>
           <td @click="handleSort('mark')">成绩</td>
-          <td>操作</td>
+          <td v-if="!isStudent">操作</td>
         </tr>
         <tr v-for="item in scoreList" :key="item.scoreId">
-          <td>{{ item.studentNum }}</td>
+          <td v-if="!isStudent">{{ item.studentNum }}</td>
           <td>{{ item.studentName }}</td>
-          <td>{{ item.className }}</td>
-          <td>{{ item.courseNum }}</td>
+          <td v-if="!isStudent">{{ item.className }}</td>
+          <td v-if="!isStudent">{{ item.courseNum }}</td>
           <td>{{ item.courseName }}</td>
           <td>{{ item.credit }}</td>
           <td>{{ item.mark }}</td>
-          <td>
+          <td v-if="!isStudent">
             <button class="table_edit_button" @click="editItem(item)">
               编辑
             </button>
@@ -283,8 +295,8 @@ export default defineComponent({
   data: () => ({
     scoreList: [] as ScoreItem[],
     allScoresList: [] as ScoreItem[], // 存储完整数据集用于校验和分析
-    personId: null,
-    courseId: null,
+    personId: null as number | null,
+    courseId: null as number | null,
     editedItem: {} as ScoreItem,
     studentList: [] as OptionItem[],
     courseList: [] as OptionItem[],
@@ -319,8 +331,7 @@ export default defineComponent({
       duplicate: ''
     },
     // 成绩分析相关
-    userRole: '',
-    examType: null,
+    examType: null as string | null,
     // 学生成绩分析
     studentAnalysis: {
       totalScore: 0,
@@ -346,13 +357,16 @@ export default defineComponent({
   computed: {
     // 获取用户角色
     isStudent() {
-      return this.userRole === 'STUDENT';
+      const appStore = useAppStore();
+      return appStore.userInfo.role === 'ROLE_STUDENT';
     },
     isTeacher() {
-      return this.userRole === 'TEACHER';
+      const appStore = useAppStore();
+      return appStore.userInfo.role === 'ROLE_TEACHER';
     },
     isAdmin() {
-      return this.userRole === 'ADMIN';
+      const appStore = useAppStore();
+      return appStore.userInfo.role === 'ROLE_ADMIN';
     },
     // 检查表单是否可以提交
     isFormValid() {
@@ -375,8 +389,6 @@ export default defineComponent({
     }
   },
   created() {
-    const appStore = useAppStore();
-    this.userRole = appStore.userInfo.role || '';
     this.initialize();
   },
 
@@ -385,13 +397,23 @@ export default defineComponent({
     async initialize() {
       try {
         this.loading.query = true;
-        // 并行获取学生和课程列表，提高性能
-        const [students, courses] = await Promise.all([
-          getStudentItemOptionList(),
-          getCourseItemOptionList()
-        ]);
-        this.studentList = students;
-        this.courseList = courses;
+        
+        if (this.isStudent) {
+          // 学生只能获取课程列表和自己的ID
+          const courses = await getCourseItemOptionList();
+          this.courseList = courses;
+          const appStore = useAppStore();
+          this.personId = appStore.userInfo.id;
+        } else {
+          // 教师和管理员可以获取学生列表和课程列表
+          const [students, courses] = await Promise.all([
+            getStudentItemOptionList(),
+            getCourseItemOptionList()
+          ]);
+          this.studentList = students;
+          this.courseList = courses;
+        }
+        
         // 查询成绩数据
         await this.query();
       } finally {
@@ -499,8 +521,13 @@ export default defineComponent({
     async query() {
       try {
         this.loading.query = true;
+        
+        // 根据角色设置查询参数
+        let queryPersonId = this.personId;
+        // 对于学生角色，personId已经在初始化时设置为用户ID，无需重复获取
+        
         const res = await getScoreList(
-          this.personId, 
+          queryPersonId, 
           this.courseId,
           this.pagination.currentPage,
           this.pagination.pageSize,
@@ -880,11 +907,21 @@ export default defineComponent({
       try {
         this.loading.query = true;
         
-        // 构建文件名
+        let personId = this.personId;
         let fileName = '成绩报告单.pdf';
-        if (this.personId && this.personId !== 0) {
+        
+        if (this.isStudent) {
+          // 学生只能生成自己的成绩单
+          // personId已经在初始化时设置为用户ID，无需重复获取
+          fileName = '我的成绩报告单.pdf';
+        } else {
+          // 教师和管理员需要选择学生
+          if (!personId || personId === 0) {
+            ElMessage.warning("请选择学生");
+            return;
+          }
           // 查找当前学生信息
-          const student = this.studentList.find(item => item.id === this.personId);
+          const student = this.studentList.find(item => item.id === personId);
           if (student) {
             fileName = `${student.title}_成绩报告单.pdf`;
           }
@@ -892,7 +929,7 @@ export default defineComponent({
         
         // 调用后台接口生成并下载PDF
         const res = await generateScoreReport(
-          this.personId || null,
+          personId || null,
           this.courseId || null,
           this.examType || null,
           fileName
