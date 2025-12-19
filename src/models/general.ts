@@ -140,6 +140,8 @@ export interface CourseItem {
   coursePath: string;
   preCourse: string;
   preCourseId: number;
+  courseTime: string;
+  courseRoom: string;
 }
 //用于成绩数据信息的定义
 export interface ScoreItem {
@@ -152,6 +154,7 @@ export interface ScoreItem {
   courseName: string;
   credit: number;
   mark: number;
+  examType?: string;
   ranking: number;
 }
 //用于家庭成员数据信息的定义

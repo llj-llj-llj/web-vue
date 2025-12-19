@@ -137,15 +137,33 @@ export async function downloadPost(url: string, label: string, data: any) {
       throw new Error(errorMessage);
     }
     
-    const blob = await response.blob();
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = label;
-    link.click();
-    URL.revokeObjectURL(link.href);
-    
-    ElMessage.success('文件下载成功');
-    return response.status;
+    // 检查响应类型是否为PDF
+    const contentType = response.headers.get('content-type');
+    if (contentType && contentType.includes('application/pdf')) {
+      // 处理PDF下载
+      const blob = await response.blob();
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = label.endsWith('.pdf') ? label : `${label}.pdf`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+      
+      ElMessage.success('PDF文件下载成功');
+      return response.status;
+    } else {
+      // 尝试解析为JSON（用于处理错误消息）
+      try {
+        const jsonData = await response.json();
+        if (jsonData.message) {
+          ElMessage.error(`下载失败：${jsonData.message}`);
+        } else {
+          ElMessage.error('下载失败：未知错误');
+        }
+      } catch (e) {
+        ElMessage.error('下载失败：响应格式错误');
+      }
+      throw new Error('下载失败');
+    }
   } catch (error: any) {
     if (error.name === 'NetworkError') {
       ElMessage.error('网络错误，无法下载文件');

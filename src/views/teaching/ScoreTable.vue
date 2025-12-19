@@ -2,34 +2,26 @@
   <div class="base_form" v-loading="loading.query" element-loading-text="查询中...">
     <div class="base_header">
       <div class="blue_column"></div>
-      <div class="base_title">课程管理</div>
+      <div class="base_title">{{ isStudent ? '我的成绩' : '成绩管理' }}</div>
     </div>
 
     <div class="base_query_oneLine">
       <div class="query_left">
-        <button class="commButton" @click="addItem()">添加</button>
-        <input 
-          style="margin-left: 10px" 
-          type="file" 
-          id="file" 
-          accept=".xlsx,.xls" 
-          @change="handleFileChange" 
-        />
-        <button class="commButton" @click="uploadExcel" :disabled="loading.upload">
-          {{ loading.upload ? '导入中...' : '批量导入' }}
-        </button>
-        <button class="commButton" @click="generateReportCard" :disabled="loading.query">
-          {{ loading.query ? '生成中...' : '生成成绩单' }}
-        </button>
+        <!-- 只有教师和管理员可以添加成绩 -->
+        <button v-if="!isStudent" class="commButton" @click="addItem()">添加</button>
+
       </div>
       <div class="query_right">
-        <span style="margin-top: 5px">学生</span>
-        <select class="commInput" v-model="personId">
-          <option value="0">请选择...</option>
-          <option v-for="item in studentList" :key="item.id" :value="item.id">
-            {{ item.title }}
-          </option>
-        </select>
+        <!-- 教师和管理员可以选择学生 -->
+        <div v-if="!isStudent" style="display: flex; align-items: center;">
+          <span style="margin-top: 5px">学生</span>
+          <select class="commInput" v-model="personId">
+            <option value="0">请选择...</option>
+            <option v-for="item in studentList" :key="item.id" :value="item.id">
+              {{ item.title }}
+            </option>
+          </select>
+        </div>
         <span style="margin-top: 5px">课程</span>
         <select class="commInput" v-model="courseId">
           <option value="0">请选择...</option>
@@ -53,24 +45,26 @@
     <div class="table_center" style="margin-top: 5px">
       <table class="content">
         <tr class="table_th">
-          <td>学号</td>
-          <td>姓名</td>
-          <td>班级</td>
-          <td>课程号</td>
+          <td v-if="!isStudent">学号</td>
+          <td>{{ isStudent ? '我的' : '学生' }}姓名</td>
+          <td v-if="!isStudent">班级</td>
+          <td v-if="!isStudent">课程号</td>
           <td @click="handleSort('courseName')">课程名</td>
+          <td>考试类型</td>
           <td>学分</td>
           <td @click="handleSort('mark')">成绩</td>
-          <td>操作</td>
+          <td v-if="!isStudent">操作</td>
         </tr>
         <tr v-for="item in scoreList" :key="item.scoreId">
-          <td>{{ item.studentNum }}</td>
+          <td v-if="!isStudent">{{ item.studentNum }}</td>
           <td>{{ item.studentName }}</td>
-          <td>{{ item.className }}</td>
-          <td>{{ item.courseNum }}</td>
+          <td v-if="!isStudent">{{ item.className }}</td>
+          <td v-if="!isStudent">{{ item.courseNum }}</td>
           <td>{{ item.courseName }}</td>
+          <td>{{ item.examType || '期末考试' }}</td>
           <td>{{ item.credit }}</td>
-          <td>{{ item.mark }}</td>
-          <td>
+          <td>{{ item.mark || 0 }}</td>
+          <td v-if="!isStudent">
             <button class="table_edit_button" @click="editItem(item)">
               编辑
             </button>
@@ -113,7 +107,7 @@
             </tr>
             <tr v-for="item in studentAnalysis.subjects" :key="item.courseId">
               <td>{{ item.courseName }}</td>
-              <td>{{ item.mark }}</td>
+              <td>{{ item.mark || 0 }}</td>
               <td>{{ item.credit }}</td>
               <td>{{ item.examType || '期末考试' }}</td>
             </tr>
@@ -257,15 +251,9 @@ import {
   getCourseItemOptionList,
   scoreSave,
   scoreDelete,
-  generateScoreReport,
 } from "~/services/teachingServ";
-import { type OptionItem, type ScoreItem as BaseScoreItem } from "~/models/general";
-
-// 扩展ScoreItem接口，添加examType属性
-export interface ScoreItem extends BaseScoreItem {
-  examType?: string;
-}
-import { uploadRequest, downloadPost } from "~/services/genServ";
+import { type OptionItem, type ScoreItem } from "~/models/general";
+import { downloadPost } from "~/services/genServ";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { useAppStore } from "~/stores/app";
 import { use } from "echarts/core";
@@ -283,8 +271,8 @@ export default defineComponent({
   data: () => ({
     scoreList: [] as ScoreItem[],
     allScoresList: [] as ScoreItem[], // 存储完整数据集用于校验和分析
-    personId: null,
-    courseId: null,
+    personId: null as number | null,
+    courseId: null as number | null,
     editedItem: {} as ScoreItem,
     studentList: [] as OptionItem[],
     courseList: [] as OptionItem[],
@@ -305,11 +293,8 @@ export default defineComponent({
       query: false,
       save: false,
       delete: false,
-      upload: false,
       analysis: false
     },
-    // 批量导入相关
-    selectedFile: null as File | null,
     // 表单验证错误信息
     validationErrors: {
       mark: '',
@@ -319,8 +304,7 @@ export default defineComponent({
       duplicate: ''
     },
     // 成绩分析相关
-    userRole: '',
-    examType: null,
+    examType: null as string | null,
     // 学生成绩分析
     studentAnalysis: {
       totalScore: 0,
@@ -346,13 +330,16 @@ export default defineComponent({
   computed: {
     // 获取用户角色
     isStudent() {
-      return this.userRole === 'STUDENT';
+      const appStore = useAppStore();
+      return appStore.userInfo.role === 'ROLE_STUDENT';
     },
     isTeacher() {
-      return this.userRole === 'TEACHER';
+      const appStore = useAppStore();
+      return appStore.userInfo.role === 'ROLE_TEACHER';
     },
     isAdmin() {
-      return this.userRole === 'ADMIN';
+      const appStore = useAppStore();
+      return appStore.userInfo.role === 'ROLE_ADMIN';
     },
     // 检查表单是否可以提交
     isFormValid() {
@@ -375,8 +362,6 @@ export default defineComponent({
     }
   },
   created() {
-    const appStore = useAppStore();
-    this.userRole = appStore.userInfo.role || '';
     this.initialize();
   },
 
@@ -385,13 +370,23 @@ export default defineComponent({
     async initialize() {
       try {
         this.loading.query = true;
-        // 并行获取学生和课程列表，提高性能
-        const [students, courses] = await Promise.all([
-          getStudentItemOptionList(),
-          getCourseItemOptionList()
-        ]);
-        this.studentList = students;
-        this.courseList = courses;
+        
+        if (this.isStudent) {
+          // 学生只能获取课程列表和自己的ID
+          const courses = await getCourseItemOptionList();
+          this.courseList = courses;
+          const appStore = useAppStore();
+          this.personId = appStore.userInfo.id;
+        } else {
+          // 教师和管理员可以获取学生列表和课程列表
+          const [students, courses] = await Promise.all([
+            getStudentItemOptionList(),
+            getCourseItemOptionList()
+          ]);
+          this.studentList = students;
+          this.courseList = courses;
+        }
+        
         // 查询成绩数据
         await this.query();
       } finally {
@@ -499,8 +494,13 @@ export default defineComponent({
     async query() {
       try {
         this.loading.query = true;
+        
+        // 根据角色设置查询参数
+        let queryPersonId = this.personId;
+        // 对于学生角色，personId已经在初始化时设置为用户ID，无需重复获取
+        
         const res = await getScoreList(
-          this.personId, 
+          queryPersonId, 
           this.courseId,
           this.pagination.currentPage,
           this.pagination.pageSize,
@@ -625,6 +625,7 @@ export default defineComponent({
       } catch (error: any) {
         // 用户取消删除操作
         if (error.name === 'ElMessageBoxCancel') {
+          this.loading.delete = false;
           return;
         }
         ElMessage.error("删除操作失败");
@@ -632,68 +633,7 @@ export default defineComponent({
         this.loading.delete = false;
       }
     },
-    // 处理文件选择
-    handleFileChange(event: Event) {
-      const input = event.target as HTMLInputElement;
-      if (input.files && input.files.length > 0) {
-        const file = input.files[0];
-        
-        // 验证文件类型
-        const validExtensions = ['.xlsx', '.xls'];
-        const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
-        if (!fileExtension || !validExtensions.includes(fileExtension)) {
-          ElMessage.warning('请选择Excel文件（.xlsx或.xls格式）');
-          input.value = ''; // 清空选择
-          this.selectedFile = null;
-          return;
-        }
-        
-        // 验证文件大小（限制为5MB）
-        const maxSize = 5 * 1024 * 1024; // 5MB
-        if (file.size > maxSize) {
-          ElMessage.warning('文件大小不能超过5MB');
-          input.value = ''; // 清空选择
-          this.selectedFile = null;
-          return;
-        }
-        
-        this.selectedFile = file;
-        ElMessage.success(`已选择文件: ${file.name}`);
-      }
-    },
-    // 上传Excel文件
-    async uploadExcel() {
-      if (!this.selectedFile) {
-        ElMessage.warning("请选择要导入的Excel文件");
-        return;
-      }
-      
-      try {
-        this.loading.upload = true;
-        
-        // 创建FormData对象
-        const formData = new FormData();
-        formData.append("file", this.selectedFile);
-        
-        // 使用uploadRequest上传文件
-        const res = await uploadRequest("/api/score/importScoreExcel", formData);
-        
-        if (res.code == 0) {
-          ElMessage.success("批量导入成功");
-          this.query();
-          // 清空选择的文件
-          const input = document.getElementById("file") as HTMLInputElement;
-          if (input) input.value = '';
-          this.selectedFile = null;
-        } else {
-          ElMessage.error(res.msg);
-        }
-      } catch (error) {
-        ElMessage.error("导入失败，请检查文件格式是否正确");
-      } finally {
-        this.loading.upload = false;
-      }
-    },
+
     // 计算学生成绩分析
     calculateStudentAnalysis(allScores: ScoreItem[]) {
       const appStore = useAppStore();
@@ -875,41 +815,7 @@ export default defineComponent({
       };
     },
     
-    // 生成成绩报告单PDF
-    async generateReportCard() {
-      try {
-        this.loading.query = true;
-        
-        // 构建文件名
-        let fileName = '成绩报告单.pdf';
-        if (this.personId && this.personId !== 0) {
-          // 查找当前学生信息
-          const student = this.studentList.find(item => item.id === this.personId);
-          if (student) {
-            fileName = `${student.title}_成绩报告单.pdf`;
-          }
-        }
-        
-        // 调用后台接口生成并下载PDF
-        const res = await generateScoreReport(
-          this.personId || null,
-          this.courseId || null,
-          this.examType || null,
-          fileName
-        );
-        
-        if (res) {
-          ElMessage.success('成绩报告单生成成功！');
-        } else {
-          ElMessage.error('成绩报告单生成失败！');
-        }
-      } catch (error) {
-        console.error('生成成绩报告单失败:', error);
-        ElMessage.error('生成成绩报告单失败，请稍后重试！');
-      } finally {
-        this.loading.query = false;
-      }
-    },
+
   },
 });
 </script>
