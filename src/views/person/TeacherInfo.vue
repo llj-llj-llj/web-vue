@@ -93,21 +93,29 @@ import { type OptionItem, type TeacherItem } from "~/models/general";
 
 export default defineComponent({
   // 双向绑定数据
-  data: () => ({
-    personId: 0 as number,
-    form: {} as TeacherItem,
-    gender: {} as OptionItem,
-    genderList: [
-      {
-        value: "1",
-        title: "男",
-      },
-      {
-        value: "2",
-        title: "女",
-      },
-    ] as OptionItem[],
-  }),
+data: () => ({
+  personId: 0,
+  form: {
+    title: "",
+    degree: "",
+    person: {
+      num: "",
+      name: "",
+      dept: "",
+      card: "",
+      gender: "",
+      birthday: "",
+      email: "",
+      phone: "",
+      address: ""
+    }
+  } as TeacherItem,
+  genderList: [
+    { value: "1", title: "男" },
+    { value: "2", title: "女" }
+  ]
+}),
+
   // 页面加载函数
   async created() {
     // 获取路由参数

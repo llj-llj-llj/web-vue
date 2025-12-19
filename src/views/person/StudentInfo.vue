@@ -8,34 +8,34 @@
       <table class="content">
         <tr>
           <td colspan="1" style="text-align: right">学号</td>
-          <td colspan="1"><input v-model="form.num" style="width: 97%" /></td>
+          <td colspan="1"><input v-model="form.num" style="width: 97%" :disabled="isStudent" /></td>
         </tr>
         <tr>
           <td colspan="1" style="text-align: right">姓名</td>
-          <td colspan="1"><input v-model="form.name" style="width: 97%" /></td>
+          <td colspan="1"><input v-model="form.name" style="width: 97%" :disabled="isStudent" /></td>
         </tr>
         <tr>
           <td colspan="1" style="text-align: right">学院</td>
-          <td colspan="1"><input v-model="form.dept" style="width: 97%" /></td>
+          <td colspan="1"><input v-model="form.dept" style="width: 97%" :disabled="isStudent" /></td>
         </tr>
         <tr>
           <td colspan="1" style="text-align: right">专业</td>
-          <td colspan="1"><input v-model="form.major" style="width: 97%" /></td>
+          <td colspan="1"><input v-model="form.major" style="width: 97%" :disabled="isStudent" /></td>
         </tr>
         <tr>
           <td colspan="1" style="text-align: right">班级</td>
           <td colspan="1">
-            <input v-model="form.className" style="width: 97%" />
+            <input v-model="form.className" style="width: 97%" :disabled="isStudent" />
           </td>
         </tr>
         <tr>
           <td colspan="1" style="text-align: right">证件号码</td>
-          <td colspan="1"><input v-model="form.card" style="width: 97%" /></td>
+          <td colspan="1"><input v-model="form.card" style="width: 97%" :disabled="isStudent" /></td>
         </tr>
         <tr>
           <td colspan="1" style="text-align: right">性别</td>
           <td colspan="1">
-            <select class="commInput" v-model="form.gender" style="width: 97%">
+            <select class="commInput" v-model="form.gender" style="width: 97%":disabled="isStudent" >
               <option value="0">请选择...</option>
               <option v-for="item in genderList" :key="item.value" :value="item.value">
                 {{ item.title }}
@@ -46,7 +46,7 @@
         <tr>
           <td colspan="1" style="text-align: right">出生日期</td>
           <td colspan="1">
-            <el-date-picker v-model="birthday" type="date" style="width: 100%" placeholder="选择出生日期" />
+            <el-date-picker v-model="birthday" type="date" style="width: 97%" placeholder="选择出生日期" :disabled="isStudent" />
           </td>
         </tr>
         <tr>
@@ -80,6 +80,7 @@ import router from "~/router";
 import { type OptionItem, type StudentItem } from "~/models/general";
 import { getOptionItem } from "~/tools/comMethod";
 import { formatDate } from "~/tools/comMethod";
+import { useAppStore } from "~/stores/app";
 
 export default defineComponent({
   //数据
@@ -93,20 +94,38 @@ export default defineComponent({
     nameRules: [],
     emailRules: [],
   }),
+  computed: {
+    isStudent(): boolean {
+      const store = useAppStore(); // 获取全局存储
+      // 关键：这里必须匹配后端返回的 "ROLE_STUDENT" 字符串
+      return store.userInfo.role === 'ROLE_STUDENT';
+    }
+  },
   //页面加载方法, 获取性别选择列表,获取学生信息,注意async和await的使用
   async created() {
+    const store = useAppStore();
     //获取获取路由参数,上一个页面传过来的学生id
     const res = this.$route.query.personId;
     if (res != null) {
       this.personId = parseInt(res.toString());
+    }else if (store.userInfo.role === 'ROLE_STUDENT') {
+      // 如果是学生自己进入，且没有路由参数，则从登录信息中提取自己的 ID
+      this.personId = store.userInfo.id; 
     }
     this.genderList = await getDictionaryOptionItemList("XBM");
     if (this.personId != null) {
+      try {
       this.form = await getStudentInfo(this.personId);
       this.birthday = new Date(this.form.birthday);
       this.gender = getOptionItem(this.genderList, this.form.gender);
     }
-  },
+    catch (error) {
+        console.error("无法获取学生详情，请检查后端接口权限配置");
+      }
+  }
+},
+ 
+
   methods: {
     //提交表单
     async submit() {
