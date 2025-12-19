@@ -9,27 +9,7 @@
       <div class="query_left">
         <!-- 只有教师和管理员可以添加成绩 -->
         <button v-if="!isStudent" class="commButton" @click="addItem()">添加</button>
-        <!-- 只有教师和管理员可以批量导入 -->
-        <input 
-          v-if="!isStudent"
-          style="margin-left: 10px" 
-          type="file" 
-          id="file" 
-          accept=".xlsx,.xls" 
-          @change="handleFileChange" 
-        />
-        <button 
-          v-if="!isStudent" 
-          class="commButton" 
-          @click="uploadExcel" 
-          :disabled="loading.upload"
-        >
-          {{ loading.upload ? '导入中...' : '批量导入' }}
-        </button>
-        <!-- 所有角色都可以生成成绩单，但学生只能生成自己的 -->
-        <button class="commButton" @click="generateReportCard" :disabled="loading.query">
-          {{ loading.query ? '生成中...' : (isStudent ? '生成我的成绩单' : '生成成绩单') }}
-        </button>
+
       </div>
       <div class="query_right">
         <!-- 教师和管理员可以选择学生 -->
@@ -70,6 +50,7 @@
           <td v-if="!isStudent">班级</td>
           <td v-if="!isStudent">课程号</td>
           <td @click="handleSort('courseName')">课程名</td>
+          <td>考试类型</td>
           <td>学分</td>
           <td @click="handleSort('mark')">成绩</td>
           <td v-if="!isStudent">操作</td>
@@ -80,8 +61,9 @@
           <td v-if="!isStudent">{{ item.className }}</td>
           <td v-if="!isStudent">{{ item.courseNum }}</td>
           <td>{{ item.courseName }}</td>
+          <td>{{ item.examType || '期末考试' }}</td>
           <td>{{ item.credit }}</td>
-          <td>{{ item.mark }}</td>
+          <td>{{ item.mark || 0 }}</td>
           <td v-if="!isStudent">
             <button class="table_edit_button" @click="editItem(item)">
               编辑
@@ -125,7 +107,7 @@
             </tr>
             <tr v-for="item in studentAnalysis.subjects" :key="item.courseId">
               <td>{{ item.courseName }}</td>
-              <td>{{ item.mark }}</td>
+              <td>{{ item.mark || 0 }}</td>
               <td>{{ item.credit }}</td>
               <td>{{ item.examType || '期末考试' }}</td>
             </tr>
@@ -269,15 +251,9 @@ import {
   getCourseItemOptionList,
   scoreSave,
   scoreDelete,
-  generateScoreReport,
 } from "~/services/teachingServ";
-import { type OptionItem, type ScoreItem as BaseScoreItem } from "~/models/general";
-
-// 扩展ScoreItem接口，添加examType属性
-export interface ScoreItem extends BaseScoreItem {
-  examType?: string;
-}
-import { uploadRequest, downloadPost } from "~/services/genServ";
+import { type OptionItem, type ScoreItem } from "~/models/general";
+import { downloadPost } from "~/services/genServ";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { useAppStore } from "~/stores/app";
 import { use } from "echarts/core";
@@ -317,11 +293,8 @@ export default defineComponent({
       query: false,
       save: false,
       delete: false,
-      upload: false,
       analysis: false
     },
-    // 批量导入相关
-    selectedFile: null as File | null,
     // 表单验证错误信息
     validationErrors: {
       mark: '',
@@ -652,6 +625,7 @@ export default defineComponent({
       } catch (error: any) {
         // 用户取消删除操作
         if (error.name === 'ElMessageBoxCancel') {
+          this.loading.delete = false;
           return;
         }
         ElMessage.error("删除操作失败");
@@ -659,68 +633,7 @@ export default defineComponent({
         this.loading.delete = false;
       }
     },
-    // 处理文件选择
-    handleFileChange(event: Event) {
-      const input = event.target as HTMLInputElement;
-      if (input.files && input.files.length > 0) {
-        const file = input.files[0];
-        
-        // 验证文件类型
-        const validExtensions = ['.xlsx', '.xls'];
-        const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
-        if (!fileExtension || !validExtensions.includes(fileExtension)) {
-          ElMessage.warning('请选择Excel文件（.xlsx或.xls格式）');
-          input.value = ''; // 清空选择
-          this.selectedFile = null;
-          return;
-        }
-        
-        // 验证文件大小（限制为5MB）
-        const maxSize = 5 * 1024 * 1024; // 5MB
-        if (file.size > maxSize) {
-          ElMessage.warning('文件大小不能超过5MB');
-          input.value = ''; // 清空选择
-          this.selectedFile = null;
-          return;
-        }
-        
-        this.selectedFile = file;
-        ElMessage.success(`已选择文件: ${file.name}`);
-      }
-    },
-    // 上传Excel文件
-    async uploadExcel() {
-      if (!this.selectedFile) {
-        ElMessage.warning("请选择要导入的Excel文件");
-        return;
-      }
-      
-      try {
-        this.loading.upload = true;
-        
-        // 创建FormData对象
-        const formData = new FormData();
-        formData.append("file", this.selectedFile);
-        
-        // 使用uploadRequest上传文件
-        const res = await uploadRequest("/api/score/importScoreExcel", formData);
-        
-        if (res.code == 0) {
-          ElMessage.success("批量导入成功");
-          this.query();
-          // 清空选择的文件
-          const input = document.getElementById("file") as HTMLInputElement;
-          if (input) input.value = '';
-          this.selectedFile = null;
-        } else {
-          ElMessage.error(res.msg);
-        }
-      } catch (error) {
-        ElMessage.error("导入失败，请检查文件格式是否正确");
-      } finally {
-        this.loading.upload = false;
-      }
-    },
+
     // 计算学生成绩分析
     calculateStudentAnalysis(allScores: ScoreItem[]) {
       const appStore = useAppStore();
@@ -902,51 +815,7 @@ export default defineComponent({
       };
     },
     
-    // 生成成绩报告单PDF
-    async generateReportCard() {
-      try {
-        this.loading.query = true;
-        
-        let personId = this.personId;
-        let fileName = '成绩报告单.pdf';
-        
-        if (this.isStudent) {
-          // 学生只能生成自己的成绩单
-          // personId已经在初始化时设置为用户ID，无需重复获取
-          fileName = '我的成绩报告单.pdf';
-        } else {
-          // 教师和管理员需要选择学生
-          if (!personId || personId === 0) {
-            ElMessage.warning("请选择学生");
-            return;
-          }
-          // 查找当前学生信息
-          const student = this.studentList.find(item => item.id === personId);
-          if (student) {
-            fileName = `${student.title}_成绩报告单.pdf`;
-          }
-        }
-        
-        // 调用后台接口生成并下载PDF
-        const res = await generateScoreReport(
-          personId || null,
-          this.courseId || null,
-          this.examType || null,
-          fileName
-        );
-        
-        if (res) {
-          ElMessage.success('成绩报告单生成成功！');
-        } else {
-          ElMessage.error('成绩报告单生成失败！');
-        }
-      } catch (error) {
-        console.error('生成成绩报告单失败:', error);
-        ElMessage.error('生成成绩报告单失败，请稍后重试！');
-      } finally {
-        this.loading.query = false;
-      }
-    },
+
   },
 });
 </script>

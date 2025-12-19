@@ -152,6 +152,7 @@ export interface ScoreItem {
   courseName: string;
   credit: number;
   mark: number;
+  examType?: string;
   ranking: number;
 }
 //用于家庭成员数据信息的定义
