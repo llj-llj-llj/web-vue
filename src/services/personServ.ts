@@ -69,12 +69,15 @@ export async function familyMemberDelete(
   return res as DataResponse;
 }
 //获取教师列表数据后台数据请求方法
-export async function getTeacherList(numName: String | null): Promise<[]> {
+export async function getTeacherList(
+  numName: string | null
+): Promise<TeacherItem[]> {
   const res = await generalRequest("/api/teacher/getTeacherList", {
     numName: numName,
   });
-  return res as [];
+  return res.data as TeacherItem[];
 }
+
 //获取教师基本信息后台数据请求方法
 export async function getTeacherInfo(
   personId: number | null
@@ -86,19 +89,22 @@ export async function getTeacherInfo(
 }
 //保存教师基本信息后台数据请求方法
 export async function teacherEditSave(
-  personId: number,
+  personId: number | null,
   form: TeacherItem
 ): Promise<DataResponse> {
-  const res = await generalRequest("/api/teacher/teacherEditSave", {
+  return await generalRequest("/api/teacher/teacherEditSave", {
     personId: personId,
-    form: form,
+    person: form.person,
+    title: form.title,
+    degree: form.degree,
   });
-  return res as DataResponse;
 }
+
 //删除教师后台数据请求方法
-export async function teacherDelete(personId: number): Promise<DataResponse> {
-  const res = await generalRequest("/api/teacher/teacherDelete", {
+export async function teacherDelete(
+  personId: number
+): Promise<DataResponse> {
+  return await generalRequest("/api/teacher/teacherDelete", {
     personId: personId,
   });
-  return res as DataResponse;
 }

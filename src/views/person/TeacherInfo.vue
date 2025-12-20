@@ -94,7 +94,7 @@ import { type OptionItem, type TeacherItem } from "~/models/general";
 export default defineComponent({
   // 双向绑定数据
 data: () => ({
-  personId: 0,
+  personId: null as number | null,
   form: {
     title: "",
     degree: "",
@@ -122,22 +122,32 @@ data: () => ({
     const res = this.$route.query.personId;
     if (res != null) {
       this.personId = parseInt(res.toString());
-    }
-    // 获取教师信息
-    if (this.personId != null) {
-      this.form = await getTeacherInfo(this.personId);
+  const data = await getTeacherInfo(this.personId);
+  this.form.title = data.title;
+  this.form.degree = data.degree;
+  Object.assign(this.form, data);
+
+
     }
   },
   methods: {
     // 提交表单
-    async submit() {
-      const res = await teacherEditSave(this.personId, this.form);
-      if (res.code == 0) {
-        router.push({ path: "/teacher-panel" });
-      } else {
-        alert(res.msg);
-      }
-    },
+async submit() {
+  const res = await teacherEditSave(
+    this.personId,
+    this.form
+  );
+
+  if (res.code === 0) {
+    if (this.personId == null && res.data) {
+    this.personId = res.data;
+  }
+    router.push({ path: "/teacher-panel" });
+  } else {
+    alert(res.msg);
+  }
+}
+
   },
 });
 </script>

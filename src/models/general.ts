@@ -189,3 +189,8 @@ export interface TeacherItem {
   title: string;
   degree: string;
 }
+export interface TeacherViewItem extends PersonItem {
+  title: string;
+  degree: string;
+}
+

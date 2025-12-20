@@ -135,7 +135,8 @@ export default defineComponent({
       if (res.code == 0) {
         router.push({ path: "/student-panel" });
       } else {
-        alert(res.msg);
+        alert(res.msg
+        );
       }
     },
   },
