@@ -44,25 +44,25 @@
             <button class="table_delete_button" @click="deleteItem(item.courseId)">删除</button>
           </td>
 
-          <!-- 学生选课按钮 -->
           <td v-if="store.userInfo.role === 'ROLE_STUDENT'">
-          <!-- 未选课 -->
-          <button
-            v-if="!selectedCourseIds.includes(item.courseId)"
-            @click="selectCourse(item.courseId)"
-          >
-            选课
-          </button>
+            <!-- 未选课 -->
+            <button
+              v-if="!selectedCourseIds.includes(Number(item.courseId))"
+              class="course-btn course-btn-select"
+              @click="selectCourse(Number(item.courseId))"
+            >
+              选课
+            </button>
 
-          <!-- 已选课 -->
-          <button
-            v-else
-            style="background:#67c23a"
-            @click="cancelCourse(item.courseId)"
-          >
-            已选
-          </button>
-        </td>
+            <!-- 已选课 -->
+            <button
+              v-else
+              class="course-btn course-btn-drop"
+              @click="cancelCourse(Number(item.courseId))"
+            >
+              退选
+            </button>
+          </td>
 
         </tr>
       </table>
@@ -228,13 +228,13 @@ export default defineComponent({
   },
 
   created() {
-    const store = useAppStore()
-    this.query()
+  this.query()
 
-    if (store.userInfo.role === 'ROLE_STUDENT') {
-      this.loadMyCourses()
-    }
-  },
+  if (this.store.userInfo.role === 'ROLE_STUDENT') {
+    this.loadMyCourses()
+  }
+},
+
 
   computed: {
     store() {
@@ -271,6 +271,7 @@ export default defineComponent({
     this.currentPage = 1
     this.courseList = await getCourseList(this.numName)
     this.makeSelectCourseList()
+
 
     if (this.store.userInfo.role === 'ROLE_STUDENT') {
       this.loadMyCourses()   // 推荐加上
@@ -355,29 +356,65 @@ export default defineComponent({
       const res = await dropMyCourse(studentId, courseId)
       if (res.code === 0) {
         message(this, '退课成功')
-        this.loadMyCourses()
+        this.loadMyCourses()   // ✅ 刷新按钮状态
       } else {
         message(this, res.msg)
       }
     },
 
-   async loadMyCourses() {
-    const store = useAppStore()
-    const studentId = store.userInfo.id
 
-    // 学生：只加载“已选课程 ID”
-    if (store.userInfo.role === 'ROLE_STUDENT') {
+    async loadMyCourses() {
+      const studentId = this.store.userInfo.id
       const res = await getMyCourseListByStudent(studentId)
-      if (res.code === 0) {
-        this.selectedCourseIds = res.data   // ✅ 正确
+
+      console.log('后端返回 res.data =', res.data)
+
+      if (res.code === 0 && Array.isArray(res.data)) {
+        // 核心修复：只取 courseId
+        this.selectedCourseIds = res.data.map(item => Number(item.courseId))
+      } else {
+        this.selectedCourseIds = []
       }
+
+      console.log('selectedCourseIds =', this.selectedCourseIds)
     }
 
-  // 教师逻辑可保留或删除（不影响选课）
-}
+
+
+
+
 
 }
 })
 </script>
+<style scoped>
+/* 基础按钮 */
+.course-btn {
+  width: 64px;
+  height: 32px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  border: 2px solid #333;
+  cursor: pointer;
+  color: #fff;
+}
 
-<style></style>
+/* 选课：红色 */
+.course-btn.course-btn-select {
+  background-color: #8b1e1e;
+}
+
+.course-btn.course-btn-select:hover {
+  background-color: #a62828;
+}
+
+/* 退选：灰色 */
+.course-btn.course-btn-drop {
+  background-color: #909399;
+}
+
+.course-btn.course-btn-drop:hover {
+  background-color: #a6a9ad;
+}
+</style>
