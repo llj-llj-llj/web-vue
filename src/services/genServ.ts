@@ -10,9 +10,7 @@ export async function generalRequest(
     console.log('发送请求:', url, data);
     const res = await axios.post(
       url,
-      {
-        data: data,
-      },
+       data,
       {
         headers: getAuthHeader(),
       }

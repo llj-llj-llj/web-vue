@@ -39,7 +39,7 @@ export async function uploadPhoto(remoteFile: string, file: any): Promise<any> {
 export async function getTeacherIntroduceData(
   personId: number | null
 ): Promise<DataResponse> {
-  const res = await generalRequest("/api/teacher/getTeacherIntroduceData", {
+  const res = await generalRequest("/api/teacher/getTeacherInfo", {
     personId: personId,
   });
   return res as DataResponse;
