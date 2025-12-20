@@ -63,7 +63,7 @@
           <td>{{ item.courseName }}</td>
           <td>{{ item.examType || '期末考试' }}</td>
           <td>{{ item.credit }}</td>
-          <td>{{ item.mark || 0 }}</td>
+          <td>{{ (item.mark || 0).toFixed(2) }}</td>
           <td v-if="!isStudent">
             <button class="table_edit_button" @click="editItem(item)">
               编辑
@@ -88,8 +88,8 @@
       <div class="student-analysis">
         <div class="total-info">
           <div class="info-item">
-            <span class="label">总分：</span>
-            <span class="value">{{ studentAnalysis.totalScore }}</span>
+            <span class="label">最终成绩：</span>
+            <span class="value">{{ studentAnalysis.weightedAverageScore.toFixed(2) }}</span>
           </div>
           <div class="info-item">
             <span class="label">排名：</span>
@@ -101,15 +101,15 @@
           <table class="content">
             <tr class="table_th">
               <td>课程名</td>
-              <td>成绩</td>
+              <td>最终成绩</td>
+              <td>单科排名</td>
               <td>学分</td>
-              <td>考试类型</td>
             </tr>
-            <tr v-for="item in studentAnalysis.subjects" :key="item.courseId">
+            <tr v-for="item in studentAnalysis.courseFinalScores" :key="item.courseId">
               <td>{{ item.courseName }}</td>
-              <td>{{ item.mark || 0 }}</td>
+              <td>{{ item.finalScore.toFixed(2) }}</td>
+              <td>{{ item.courseRanking || '--' }}</td>
               <td>{{ item.credit }}</td>
-              <td>{{ item.examType || '期末考试' }}</td>
             </tr>
           </table>
         </div>
@@ -123,15 +123,26 @@
         <div class="class-info">
           <div class="info-item">
             <span class="label">平均分：</span>
-            <span class="value">{{ classAnalysis.averageScore.toFixed(2) }}</span>
+            <span class="value">{{ classAnalysis.weightedAverageScore.toFixed(2) }}</span>
           </div>
           <div class="info-item">
             <span class="label">最高分：</span>
-            <span class="value">{{ classAnalysis.highestScore }}</span>
+            <span class="value">{{ classAnalysis.highestScore.toFixed(2) }}</span>
           </div>
           <div class="info-item">
             <span class="label">及格率：</span>
             <span class="value">{{ (classAnalysis.passRate * 100).toFixed(2) }}%</span>
+          </div>
+        </div>
+        
+        <!-- 考试类型权重说明 -->
+        <div class="weight-info">
+          <h4>考试类型权重说明</h4>
+          <div class="weight-list">
+            <div v-for="(weight, examType) in examTypeWeights" :key="examType" class="weight-item">
+              <span class="exam-type">{{ examType }}：</span>
+              <span class="weight-value">{{ (weight * 100).toFixed(0) }}%</span>
+            </div>
           </div>
         </div>
         
@@ -245,14 +256,8 @@
 </template>
 <script lang="ts">
 import { defineComponent, ref, onMounted, computed } from "vue";
-import {
-  getScoreList,
-  getStudentItemOptionList,
-  getCourseItemOptionList,
-  scoreSave,
-  scoreDelete,
-} from "~/services/teachingServ";
-import { type OptionItem, type ScoreItem } from "~/models/general";
+import { getScoreList, getStudentItemOptionList, getCourseItemOptionList, scoreSave, scoreDelete, getStudentFinalScoreAnalysis, getClassFinalScoreAnalysis } from "~/services/teachingServ";
+import { type DataResponse, type ScoreItem, type OptionItem } from "~/models/general";
 import { downloadPost } from "~/services/genServ";
 import { ElMessage, ElMessageBox } from "element-plus";
 import { useAppStore } from "~/stores/app";
@@ -307,22 +312,45 @@ export default defineComponent({
     examType: null as string | null,
     // 学生成绩分析
     studentAnalysis: {
+      studentId: 0,
+      studentName: '',
+      studentNum: '',
+      className: '',
+      totalCredits: 0,
       totalScore: 0,
+      weightedAverageScore: 0,  // 加权平均分
       ranking: 0,
-      subjects: [] as ScoreItem[]
+      subjects: [] as ScoreItem[],
+      courseFinalScores: [] as Array<{
+        courseId: number;
+        courseName: string;
+        courseNum: string;
+        credit: number;
+        finalScore: number;
+        courseRanking: number;
+        examTypeScores: Array<{
+          examType: string;
+          score: number;
+          weight: number;
+        }>;
+      }>
     },
     // 班级成绩分析
     classAnalysis: {
       averageScore: 0,
+      weightedAverageScore: 0,  // 加权平均分
       highestScore: 0,
       passRate: 0,
       subjectScores: [] as Array<{
         courseName: string;
         averageScore: number;
+        weightedAverageScore: number;
         highestScore: number;
         passRate: number;
       }>
     },
+    // 考试类型权重配置
+    examTypeWeights: {} as Record<string, number>,
     // 图表配置
     barChartOption: {},
     lineChartOption: {}
@@ -366,6 +394,17 @@ export default defineComponent({
   },
 
   methods: {
+    // 获取课程权重配置
+    getCourseWeights(courseId: number): Record<string, number> {
+      // 使用默认权重配置
+      return {
+        '期末考试': 0.6,
+        '期中考试': 0.3,
+        '平时成绩': 0.1,
+        '模拟考试': 0.2
+      };
+    },
+    
     // 初始化,获取学生选择项列表和课程选择项列表
     async initialize() {
       try {
@@ -406,9 +445,17 @@ export default defineComponent({
         this.sort.sortBy = sortBy;
         this.sort.sortDesc = false;
       }
-      // 重新查询数据
-      this.pagination.currentPage = 1;
-      this.query();
+      
+      // 对于学生端，需要特殊处理排序，确保相同科目的成绩仍然放在一起
+      if (this.isStudent) {
+        // 重新查询数据
+        this.pagination.currentPage = 1;
+        this.query();
+      } else {
+        // 非学生端保持原有逻辑
+        this.pagination.currentPage = 1;
+        this.query();
+      }
     },
     // 处理成绩输入事件，转换为数字类型
     handleMarkInput(event: Event) {
@@ -512,19 +559,96 @@ export default defineComponent({
         const allScores = res || [];
         // 存储完整数据集用于校验和分析
         this.allScoresList = [...allScores];
-        // 设置总数据量
-        this.pagination.dataTotal = allScores.length;
         
-        // 实现前端分页
-        const startIndex = (this.pagination.currentPage - 1) * this.pagination.pageSize;
-        const endIndex = startIndex + this.pagination.pageSize;
-        this.scoreList = allScores.slice(startIndex, endIndex);
+        // 对于学生端，按课程名分组，将相同科目的成绩放在一起
+        if (this.isStudent) {
+          // 先按课程名分组
+          const groupedScores: Record<string, ScoreItem[]> = allScores.reduce((groups: Record<string, ScoreItem[]>, item: ScoreItem) => {
+            const courseName = item.courseName;
+            if (!groups[courseName]) {
+              groups[courseName] = [];
+            }
+            groups[courseName].push(item);
+            return groups;
+          }, {} as Record<string, ScoreItem[]>);
+          
+          // 对每个课程组内的成绩按考试类型排序（期末考试 > 期中考试 > 平时成绩 > 模拟考试）
+          const examTypeOrder = {
+            '期末考试': 1,
+            '期中考试': 2,
+            '平时成绩': 3,
+            '模拟考试': 4
+          };
+          
+          // 将分组后的成绩重新组合成一个数组
+          let sortedScores = Object.keys(groupedScores).reduce((result, courseName) => {
+            const courseScores = groupedScores[courseName];
+            // 在同一课程内按考试类型排序
+            courseScores.sort((a, b) => {
+              // 明确类型转换，解决索引类型不匹配问题
+              const examTypeA = a.examType || '期末考试';
+              const examTypeB = b.examType || '期末考试';
+              const orderA = examTypeOrder[examTypeA as keyof typeof examTypeOrder] ?? 5;
+              const orderB = examTypeOrder[examTypeB as keyof typeof examTypeOrder] ?? 5;
+              return orderA - orderB;
+            });
+            return result.concat(courseScores);
+          }, [] as ScoreItem[]);
+          
+          // 如果有排序要求，对分组后的成绩进行排序
+          if (this.sort.sortBy) {
+            sortedScores.sort((a, b) => {
+              let valueA: any, valueB: any;
+              
+              switch (this.sort.sortBy) {
+                case 'courseName':
+                  valueA = a.courseName || '';
+                  valueB = b.courseName || '';
+                  break;
+                case 'mark':
+                  valueA = a.mark || 0;
+                  valueB = b.mark || 0;
+                  break;
+                default:
+                  valueA = a[this.sort.sortBy as keyof ScoreItem] || '';
+                  valueB = b[this.sort.sortBy as keyof ScoreItem] || '';
+              }
+              
+              if (typeof valueA === 'string') {
+                return this.sort.sortDesc ? 
+                  valueB.localeCompare(valueA) : 
+                  valueA.localeCompare(valueB);
+              } else {
+                return this.sort.sortDesc ? 
+                  (valueB as number) - (valueA as number) : 
+                  (valueA as number) - (valueB as number);
+              }
+            });
+          }
+          
+          // 设置总数据量
+          this.pagination.dataTotal = sortedScores.length;
+          
+          // 实现前端分页
+          const startIndex = (this.pagination.currentPage - 1) * this.pagination.pageSize;
+          const endIndex = startIndex + this.pagination.pageSize;
+          this.scoreList = sortedScores.slice(startIndex, endIndex);
+        } else {
+          // 非学生端保持原有逻辑
+          // 设置总数据量
+          this.pagination.dataTotal = allScores.length;
+          
+          // 实现前端分页
+          const startIndex = (this.pagination.currentPage - 1) * this.pagination.pageSize;
+          const endIndex = startIndex + this.pagination.pageSize;
+          this.scoreList = allScores.slice(startIndex, endIndex);
+        }
         
         // 计算成绩分析 - 使用完整数据集allScores进行分析
         if (this.isStudent) {
           this.calculateStudentAnalysis(allScores);
         } else if (this.isTeacher) {
-          this.calculateClassAnalysis(allScores);
+          await this.calculateClassAnalysis(allScores);
           this.generateCharts();
         }
       } finally {
@@ -634,10 +758,65 @@ export default defineComponent({
       }
     },
 
-    // 计算学生成绩分析
-    calculateStudentAnalysis(allScores: ScoreItem[]) {
+    // 计算学生成绩分析 - 使用后端API
+    async calculateStudentAnalysis(allScores: ScoreItem[]) {
+      try {
+        this.loading.analysis = true;
+        
+        // 调用后端API获取学生最终成绩分析
+        const appStore = useAppStore();
+        const studentId = appStore.userInfo.id;
+        
+        const res = await getStudentFinalScoreAnalysis(studentId);
+        
+        if (res.code === 0 && res.data) {
+          // 更新学生分析数据
+          this.studentAnalysis.studentId = res.data.studentId;
+          this.studentAnalysis.studentName = res.data.studentName;
+          this.studentAnalysis.studentNum = res.data.studentNum;
+          this.studentAnalysis.className = res.data.className;
+          this.studentAnalysis.totalCredits = res.data.totalCredits;
+          this.studentAnalysis.weightedAverageScore = res.data.weightedAverageScore || 0;
+          this.studentAnalysis.ranking = res.data.classRanking || 0;
+          
+          // 处理课程最终成绩
+          if (res.data.courseFinalScores && Array.isArray(res.data.courseFinalScores)) {
+            this.studentAnalysis.courseFinalScores = res.data.courseFinalScores.map((course: any) => ({
+              courseId: course.courseId,
+              courseName: course.courseName,
+              courseNum: course.courseNum,
+              credit: course.credit,
+              finalScore: course.finalScore,
+              courseRanking: course.courseRanking || 0,
+              examTypeScores: course.examTypeScores || []
+            }));
+          }
+          
+          // 保持与原有代码的兼容性，设置subjects字段
+          this.studentAnalysis.subjects = allScores.filter(item => item.personId === studentId);
+        } else {
+          // 如果API调用失败，使用原有逻辑作为备选方案
+          this.calculateStudentAnalysisFallback(allScores);
+        }
+      } catch (error) {
+        console.error("获取学生最终成绩分析失败:", error);
+        // 如果API调用失败，使用原有逻辑作为备选方案
+        this.calculateStudentAnalysisFallback(allScores);
+      } finally {
+        this.loading.analysis = false;
+      }
+    },
+    
+    // 备选方案：使用原有逻辑计算学生成绩分析
+    calculateStudentAnalysisFallback(allScores: ScoreItem[]) {
       const appStore = useAppStore();
       const studentId = appStore.userInfo.id;
+      
+      // 获取当前课程的权重配置
+      const weights = this.getCourseWeights(this.courseId || 0);
+      
+      // 更新考试类型权重配置，用于模板显示
+      this.examTypeWeights = weights;
       
       // 获取当前学生的所有成绩
       const studentScores = allScores.filter(item => item.personId === studentId);
@@ -645,6 +824,23 @@ export default defineComponent({
       
       // 计算总分
       this.studentAnalysis.totalScore = studentScores.reduce((sum, item) => sum + (item.mark || 0), 0);
+      
+      // 计算加权总分
+      const totalWeightedScore = studentScores.reduce((sum, item) => {
+        const mark = item.mark || 0;
+        const examType = item.examType || '期末考试';
+        const weight = weights[examType] || 0;
+        return sum + (mark * weight);
+      }, 0);
+      
+      // 计算总权重
+      const totalWeight = studentScores.reduce((sum, item) => {
+        const examType = item.examType || '期末考试';
+        return sum + (weights[examType] || 0);
+      }, 0);
+      
+      // 计算加权平均分
+      this.studentAnalysis.weightedAverageScore = totalWeight > 0 ? totalWeightedScore / totalWeight : 0;
       
       // 计算排名（假设当前查询结果包含所有学生的成绩）
       if (allScores.length > 0) {
@@ -685,12 +881,174 @@ export default defineComponent({
       } else {
         this.studentAnalysis.ranking = 0;
       }
+      
+      // 计算各科最终成绩和单科排名
+      this.calculateCourseFinalScoresAndRankings(allScores);
     },
-    // 计算班级成绩分析
-    calculateClassAnalysis(allScores: ScoreItem[]) {
+    
+    // 计算各科最终成绩和单科排名
+    calculateCourseFinalScoresAndRankings(allScores: ScoreItem[]) {
+      const appStore = useAppStore();
+      const studentId = appStore.userInfo.id;
+      
+      // 获取当前课程的权重配置
+      const weights = this.getCourseWeights(this.courseId || 0);
+      
+      // 按课程分组处理所有学生的成绩
+      const courseGroups = allScores.reduce((groups, item) => {
+        const courseId = item.courseId;
+        if (!groups[courseId]) {
+          groups[courseId] = {
+            courseName: item.courseName,
+            courseNum: item.courseNum || '',
+            credit: item.credit || 0,
+            students: []
+          };
+        }
+        
+        // 查找是否已有该学生的记录
+        let studentRecord = groups[courseId].students.find(s => s.studentId === item.personId);
+        if (!studentRecord) {
+          studentRecord = {
+            studentId: item.personId,
+            studentName: item.studentName,
+            className: item.className,
+            examTypeScores: []
+          };
+          groups[courseId].students.push(studentRecord);
+        }
+        
+        // 添加考试成绩
+        studentRecord.examTypeScores.push({
+          examType: item.examType || '期末考试',
+          score: item.mark || 0,
+          weight: weights[item.examType || '期末考试'] || 0
+        });
+        
+        return groups;
+      }, {} as Record<number, {
+        courseName: string;
+        courseNum: string;
+        credit: number;
+        students: Array<{
+          studentId: number;
+          studentName: string;
+          className: string;
+          examTypeScores: Array<{
+            examType: string;
+            score: number;
+            weight: number;
+          }>;
+        }>;
+      }>);
+      
+      // 计算每个学生的各科最终成绩并排名
+      this.studentAnalysis.courseFinalScores = Object.keys(courseGroups).map(courseId => {
+        const course = courseGroups[Number(courseId)];
+        
+        // 计算每个学生的最终成绩
+        const studentFinalScores = course.students.map(student => {
+          // 计算加权总分
+          const totalWeightedScore = student.examTypeScores.reduce((sum, exam) => 
+            sum + (exam.score * exam.weight), 0);
+          
+          // 计算总权重
+          const totalWeight = student.examTypeScores.reduce((sum, exam) => 
+            sum + exam.weight, 0);
+          
+          // 计算最终成绩
+          const finalScore = totalWeight > 0 ? totalWeightedScore / totalWeight : 0;
+          
+          return {
+            studentId: student.studentId,
+            studentName: student.studentName,
+            className: student.className,
+            finalScore: finalScore
+          };
+        });
+        
+        // 按最终成绩降序排序
+        studentFinalScores.sort((a, b) => b.finalScore - a.finalScore);
+        
+        // 找到当前学生的排名
+        const currentStudentRank = studentFinalScores.findIndex(s => s.studentId === studentId) + 1;
+        const currentStudentScore = studentFinalScores.find(s => s.studentId === studentId)?.finalScore || 0;
+        
+        return {
+          courseId: Number(courseId),
+          courseName: course.courseName,
+          courseNum: course.courseNum,
+          credit: course.credit,
+          finalScore: currentStudentScore,
+          courseRanking: currentStudentRank || 0,
+          examTypeScores: course.students.find(s => s.studentId === studentId)?.examTypeScores || []
+        };
+      });
+    },
+    // 计算班级成绩分析 - 使用后端API
+    async calculateClassAnalysis(allScores: ScoreItem[]) {
+      try {
+        this.loading.analysis = true;
+        
+        // 调用后端API获取班级最终成绩分析
+        const res = await getClassFinalScoreAnalysis(this.courseId, this.examType);
+        
+        if (res.code === 0 && res.data && res.data.classAnalyses) {
+          // 更新班级分析数据
+          const classAnalyses = res.data.classAnalyses;
+          
+          if (classAnalyses.length > 0) {
+            // 如果有多个班级，计算平均值
+            const totalAverageScore = classAnalyses.reduce((sum: number, item: any) => sum + item.averageScore, 0);
+            const totalWeightedAverageScore = classAnalyses.reduce((sum: number, item: any) => sum + (item.weightedAverageScore || item.averageScore), 0);
+            const totalHighestScore = Math.max(...classAnalyses.map((item: any) => item.highestScore));
+            const totalPassRate = classAnalyses.reduce((sum: number, item: any) => sum + item.passRate, 0) / classAnalyses.length;
+            
+            this.classAnalysis.averageScore = totalAverageScore / classAnalyses.length;
+            this.classAnalysis.weightedAverageScore = totalWeightedAverageScore / classAnalyses.length;
+            this.classAnalysis.highestScore = totalHighestScore;
+            this.classAnalysis.passRate = totalPassRate;
+            
+            // 更新科目成绩分析
+            this.classAnalysis.subjectScores = classAnalyses.map((item: any) => ({
+              courseName: item.className,
+              averageScore: item.averageScore,
+              weightedAverageScore: item.weightedAverageScore || item.averageScore,
+              highestScore: item.highestScore,
+              passRate: item.passRate
+            }));
+          } else {
+            // 如果没有数据，设置为0
+            this.classAnalysis = {
+              averageScore: 0,
+              weightedAverageScore: 0,
+              highestScore: 0,
+              passRate: 0,
+              subjectScores: []
+            };
+          }
+          
+          // 获取权重配置
+          this.examTypeWeights = this.getCourseWeights(this.courseId || 0);
+        } else {
+          // 如果API调用失败，使用原有逻辑作为备选方案
+          this.calculateClassAnalysisFallback(allScores);
+        }
+      } catch (error) {
+        console.error("获取班级最终成绩分析失败:", error);
+        // 如果API调用失败，使用原有逻辑作为备选方案
+        this.calculateClassAnalysisFallback(allScores);
+      } finally {
+        this.loading.analysis = false;
+      }
+    },
+    
+    // 备选方案：使用原有逻辑计算班级成绩分析
+    async calculateClassAnalysisFallback(allScores: ScoreItem[]) {
       if (allScores.length === 0) {
         this.classAnalysis = {
           averageScore: 0,
+          weightedAverageScore: 0,  // 加权平均分
           highestScore: 0,
           passRate: 0,
           subjectScores: []
@@ -698,9 +1056,32 @@ export default defineComponent({
         return;
       }
       
+      // 获取当前课程的权重配置
+      const weights = this.getCourseWeights(this.courseId || 0);
+      
+      // 更新考试类型权重配置，用于模板显示
+      this.examTypeWeights = weights;
+      
       // 计算全班平均分
       const totalScore = allScores.reduce((sum, item) => sum + (item.mark || 0), 0);
       this.classAnalysis.averageScore = totalScore / allScores.length;
+      
+      // 计算全班加权平均分
+      const totalWeightedScore = allScores.reduce((sum, item) => {
+        const mark = item.mark || 0;
+        const examType = item.examType || '期末考试';
+        const weight = weights[examType] || 0;
+        return sum + (mark * weight);
+      }, 0);
+      
+      // 计算总权重
+      const totalWeight = allScores.reduce((sum, item) => {
+        const examType = item.examType || '期末考试';
+        return sum + (weights[examType] || 0);
+      }, 0);
+      
+      // 避免除以0
+      this.classAnalysis.weightedAverageScore = totalWeight > 0 ? totalWeightedScore / totalWeight : 0;
       
       // 计算最高分
       this.classAnalysis.highestScore = Math.max(...allScores.map(item => item.mark || 0));
@@ -728,11 +1109,49 @@ export default defineComponent({
         const subjectPassCount = scores.filter(item => (item.mark || 0) >= 60).length;
         const subjectPassRate = subjectPassCount / scores.length;
         
+        // 计算科目加权平均分
+        const subjectWeightedScore = scores.reduce((sum, item) => {
+          const mark = item.mark || 0;
+          const examType = item.examType || '期末考试';
+          const weight = weights[examType] || 0;
+          return sum + (mark * weight);
+        }, 0);
+        
+        const subjectTotalWeight = scores.reduce((sum, item) => {
+          const examType = item.examType || '期末考试';
+          return sum + (weights[examType] || 0);
+        }, 0);
+        
+        const subjectWeightedAverageScore = subjectTotalWeight > 0 ? subjectWeightedScore / subjectTotalWeight : 0;
+        
+        // 按考试类型统计成绩
+        const examTypeScores: Record<string, { averageScore: number; count: number }> = {};
+        scores.forEach(item => {
+          const examType = item.examType || '期末考试';
+          const mark = item.mark || 0;
+          
+          if (!examTypeScores[examType]) {
+            examTypeScores[examType] = { averageScore: 0, count: 0 };
+          }
+          
+          // 累计成绩和计数
+          examTypeScores[examType].averageScore += mark;
+          examTypeScores[examType].count += 1;
+        });
+        
+        // 计算各考试类型的平均分
+        Object.keys(examTypeScores).forEach(examType => {
+          const scores = examTypeScores[examType];
+          scores.averageScore = scores.averageScore / scores.count;
+        });
+        
         return {
           courseName,
           averageScore: subjectAverageScore,
+          weightedAverageScore: subjectWeightedAverageScore,
           highestScore: subjectHighestScore,
-          passRate: subjectPassRate
+          passRate: subjectPassRate,
+          examTypeScores: examTypeScores
         };
       });
     },
@@ -744,7 +1163,7 @@ export default defineComponent({
       // 柱状图配置：科目平均分对比
       this.barChartOption = {
         title: {
-          text: hasData ? '各科目平均分对比' : '暂无成绩数据'
+          text: hasData ? '各科目成绩对比' : '暂无成绩数据'
         },
         tooltip: {
           trigger: 'axis',
@@ -752,13 +1171,16 @@ export default defineComponent({
             type: 'shadow'
           }
         },
+        legend: {
+          data: ['平均分']
+        },
         xAxis: {
           type: 'category',
           data: subjectNames
         },
         yAxis: {
           type: 'value',
-          name: '平均分',
+          name: '分数',
           min: 0,
           max: 100
         },
@@ -766,9 +1188,9 @@ export default defineComponent({
           {
             name: '平均分',
             type: 'bar',
-            data: hasData ? this.classAnalysis.subjectScores.map(item => item.averageScore) : [0],
+            data: hasData ? this.classAnalysis.subjectScores.map(item => item.weightedAverageScore.toFixed(2)) : [0],
             itemStyle: {
-              color: '#5470c6'
+              color: '#91cc75'
             },
             // 数据为空时隐藏柱子
             ...(!hasData && { itemStyle: { opacity: 0 } })
@@ -801,7 +1223,7 @@ export default defineComponent({
           {
             name: '及格率',
             type: 'line',
-            data: hasData ? this.classAnalysis.subjectScores.map(item => (item.passRate * 100)) : [0],
+            data: hasData ? this.classAnalysis.subjectScores.map(item => (item.passRate * 100).toFixed(2)) : [0],
             itemStyle: {
               color: '#91cc75'
             },
@@ -905,6 +1327,47 @@ export default defineComponent({
   display: flex;
   flex-direction: column;
   gap: 30px;
+}
+
+.weight-info {
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 15px;
+  margin-top: 15px;
+  border: 1px solid #e9ecef;
+}
+
+.weight-info h4 {
+  margin: 0 0 10px 0;
+  font-size: 16px;
+  color: #2c3e50;
+  border-bottom: 1px solid #e9ecef;
+  padding-bottom: 5px;
+}
+
+.weight-info .weight-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.weight-info .weight-item {
+  display: flex;
+  align-items: center;
+  padding: 5px 10px;
+  background-color: white;
+  border-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.weight-info .weight-item .exam-type {
+  font-weight: 500;
+  margin-right: 5px;
+}
+
+.weight-info .weight-item .weight-value {
+  font-weight: bold;
+  color: #3498db;
 }
 
 .chart-item {

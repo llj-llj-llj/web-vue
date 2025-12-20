@@ -7,6 +7,7 @@ export async function generalRequest(
   data: any | null
 ): Promise<any> {
   try {
+    console.log('发送请求:', url, data);
     const res = await axios.post(
       url,
       {
@@ -17,6 +18,8 @@ export async function generalRequest(
       }
     );
     
+    console.log('收到响应:', res.data);
+    
     if (res.status === 200) {
       // 检查业务状态码
       if (res.data && res.data.code !== undefined) {
@@ -24,8 +27,9 @@ export async function generalRequest(
           return res.data;
         } else {
           // 业务错误，显示错误消息
-          ElMessage.error(res.data.message || '请求失败，请重试');
-          throw new Error(res.data.message || '业务错误');
+          console.error('业务错误:', res.data);
+          ElMessage.error(res.data.message || res.data.msg || '请求失败，请重试');
+          throw new Error(res.data.message || res.data.msg || '业务错误');
         }
       }
       return res.data;
@@ -36,6 +40,7 @@ export async function generalRequest(
     }
   } catch (error: any) {
     // 网络错误或其他错误
+    console.error('请求错误:', error);
     if (error.response) {
       // 服务器响应了错误
       ElMessage.error(`请求失败：${error.response.data?.message || error.response.statusText || '未知错误'}`);
