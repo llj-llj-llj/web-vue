@@ -81,6 +81,8 @@ import { type OptionItem, type StudentItem } from "~/models/general";
 import { getOptionItem } from "~/tools/comMethod";
 import { formatDate } from "~/tools/comMethod";
 import { useAppStore } from "~/stores/app";
+import { ElMessage } from "element-plus";
+
 
 export default defineComponent({
   //数据
@@ -129,13 +131,16 @@ export default defineComponent({
   methods: {
     //提交表单
     async submit() {
-      //      this.form.gender = this.gender.value;
       this.form.birthday = formatDate(this.birthday);
       const res = await studentEditSave(this.personId, this.form);
+
       if (res.code == 0) {
-        router.push({ path: "/student-panel" });
+        ElMessage.success("提交成功！");
+        setTimeout(() => {
+          router.push({ path: "/student-panel" });
+        }, 300);
       } else {
-        alert(res.msg);
+        ElMessage.error(res?.msg ?? "提交失败（后端未返回错误信息）");
       }
     },
   },
