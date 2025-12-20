@@ -90,6 +90,10 @@ import { getTeacherInfo, teacherEditSave } from "~/services/personServ";
 import { defineComponent } from "vue";
 import router from "~/router";
 import { type OptionItem, type TeacherItem } from "~/models/general";
+  import { getPersonIdFromToken } from "~/tools/auth";
+  import { useAppStore } from "~/stores/app";
+
+
 
 export default defineComponent({
   // 双向绑定数据
@@ -117,19 +121,43 @@ data: () => ({
 }),
 
   // 页面加载函数
-  async created() {
-    // 获取路由参数
-    const res = this.$route.query.personId;
-    if (res != null) {
-      this.personId = parseInt(res.toString());
-  const data = await getTeacherInfo(this.personId);
-  this.form.title = data.title;
-  this.form.degree = data.degree;
+
+async created() {
+  console.log("=== TeacherInfo created start ===");
+
+  const store = useAppStore();
+
+  // 1) 先从路由拿（如果是列表跳转带了 query 的情况）
+  let pid = Number(this.$route.query.personId || 0) || null;
+
+  // 2) 再从 pinia 拿（你这个项目里 userInfo.id 就是 317）
+  if (!pid) pid = store.userInfo?.id ?? null;
+
+  // 3) 最后从 localStorage 的 app 里兜底（你控制台已经验证这里有）
+  if (!pid) {
+    const app = JSON.parse(localStorage.getItem("app") || "{}");
+    pid = app?.userInfo?.id ?? null;
+  }
+
+  console.log("[FINAL] resolved pid =", pid);
+
+  if (!pid) {
+    alert("无法获取当前登录教师ID，请重新登录");
+    return;
+  }
+
+  this.personId = pid;
+
+  // 然后正常调接口
+  const resp = await getTeacherInfo(pid);
+  // 注意你的接口返回大概率是 {code, data, msg}，所以取 resp.data
+  const data = resp.data ?? resp; // 视你封装而定
   Object.assign(this.form, data);
+},
 
 
-    }
-  },
+
+
   methods: {
     // 提交表单
 async submit() {

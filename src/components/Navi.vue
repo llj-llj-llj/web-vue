@@ -204,19 +204,60 @@ export default defineComponent({
     },
     // 路由跳转 如果路由名为ProjectHtml或者ProjectVideo则打开新的窗口 其他的路由跳转到对应的页面
     routerName(name: string) {
-      if (name == null || name == undefined || name == "") {
-        return;
+  if (!name) return;
+
+  if (name === "ProjectHtml") {
+    this.openProjectHtml();
+    return;
+  }
+  if (name === "ProjectVideo") {
+    this.openProjectVideo();
+    return;
+  }
+
+  // ✅ 关键：TeacherIntroduce / StudentIntroduce 需要 personId
+  if (name === "TeacherIntroduce" || name === "StudentIntroduce") {
+    const store = useAppStore();
+
+    // 尽量从 store 里取（字段名不确定，所以写得更兼容）
+    const pid =
+      Number((store.userInfo as any).personId) ||
+      Number((store.userInfo as any).perId) ||
+      Number((store.userInfo as any).id);
+
+    if (pid) {
+      router.push({
+        path: "/" + name,
+        query: { personId: pid },
+      });
+      return;
+    }
+
+    // 如果 store 里没有，再尝试从 localStorage 取（保险）
+    try {
+      const userStr =
+        localStorage.getItem("userInfo") ||
+        localStorage.getItem("user") ||
+        localStorage.getItem("loginUser");
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        const pid2 = Number(user?.personId || user?.perId || user?.id);
+        if (pid2) {
+          router.push({ path: "/" + name, query: { personId: pid2 } });
+          return;
+        }
       }
-      if (name == "ProjectHtml") {
-        this.openProjectHtml();
-        return;
-      }
-      if (name == "ProjectVideo") {
-        this.openProjectVideo();
-        return;
-      }
-      router.push({ path: "/" + name });
-    },
+    } catch {}
+
+    // 最后兜底：仍然跳转，但页面会提示缺少人员ID（至少不再误请求 null）
+    router.push({ path: "/" + name });
+    return;
+  }
+
+  // 其它菜单正常跳
+  router.push({ path: "/" + name });
+},
+
     // 打开新窗口 显示projectDoc.html内容，这个文件在public目录下,同学要修改该页面的内容，作为项目详细介绍的页面，用于检查作业的老师直接打开该页面即可看到作业的详细介绍
     openProjectHtml() {
       window.open("projectDoc.html");
