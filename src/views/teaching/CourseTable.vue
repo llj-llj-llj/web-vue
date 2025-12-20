@@ -36,33 +36,33 @@
           <td>{{ item.credit }}</td>
           <td>{{ item.coursePath }}</td>
           <td>{{ item.preCourse }}</td>
-          <td>{{ item.courseTime }}</td>
-          <td>{{ item.courseRoom }}</td>
+          <td>{{ item.classTime }}</td>
+          <td>{{ item.location }}</td>
            <!-- 教师 / 管理员操作 -->
           <td v-if="canEditCourse">
             <button class="table_edit_button" @click="editItem(item)">编辑</button>
             <button class="table_delete_button" @click="deleteItem(item.courseId)">删除</button>
           </td>
 
-          <!-- 学生选课按钮 -->
           <td v-if="store.userInfo.role === 'ROLE_STUDENT'">
-          <!-- 未选课 -->
-          <button
-            v-if="!selectedCourseIds.includes(item.courseId)"
-            @click="selectCourse(item.courseId)"
-          >
-            选课
-          </button>
+            <!-- 未选课 -->
+            <button
+              v-if="!selectedCourseIds.includes(Number(item.courseId))"
+              class="course-btn course-btn-select"
+              @click="selectCourse(Number(item.courseId))"
+            >
+              选课
+            </button>
 
-          <!-- 已选课 -->
-          <button
-            v-else
-            style="background:#67c23a"
-            @click="cancelCourse(item.courseId)"
-          >
-            已选
-          </button>
-        </td>
+            <!-- 已选课 -->
+            <button
+              v-else
+              class="course-btn course-btn-drop"
+              @click="cancelCourse(Number(item.courseId))"
+            >
+              退选
+            </button>
+          </td>
 
         </tr>
       </table>
@@ -178,6 +178,15 @@
             </select>
           </td>
         </tr>
+        <tr>
+          <td colspan="1" style="text-align: right">上课时间</td>
+          <td colspan="1"><input v-model="form.classTime" style="width: 97%" /></td>
+        </tr>
+        <tr>
+          <td colspan="1" style="text-align: right">上课地点</td>
+          <td colspan="1"><input v-model="form.location" style="width: 97%" /></td>
+        </tr>
+      
 
         <tr>
           <td colspan="2">
@@ -199,10 +208,9 @@ import { getDialog } from '~/tools/comMethod'
 import { useAppStore } from '~/stores/app'
 import {
   getMyCourseListByStudent,
-  getMyCourseListByTeacher,
   selectMyCourse,
   dropMyCourse
-} from '~/services/myCourseServ'
+} from '~/services/courseChooseServ'
 
 export default defineComponent({
   data() {
@@ -220,13 +228,13 @@ export default defineComponent({
   },
 
   created() {
-    const store = useAppStore()
-    this.query()
+  this.query()
 
-    if (store.userInfo.role === 'ROLE_STUDENT') {
-      this.loadMyCourses()
-    }
-  },
+  if (this.store.userInfo.role === 'ROLE_STUDENT') {
+    this.loadMyCourses()
+  }
+},
+
 
   computed: {
     store() {
@@ -260,10 +268,16 @@ export default defineComponent({
     },
 
     async query() {
-      this.currentPage = 1
-      this.courseList = await getCourseList(this.numName)
-      this.makeSelectCourseList()
-    },
+    this.currentPage = 1
+    this.courseList = await getCourseList(this.numName)
+    this.makeSelectCourseList()
+
+
+    if (this.store.userInfo.role === 'ROLE_STUDENT') {
+      this.loadMyCourses()   // 推荐加上
+    }
+  },
+
 
     addItem() {
       this.form = {} as CourseItem
@@ -342,33 +356,65 @@ export default defineComponent({
       const res = await dropMyCourse(studentId, courseId)
       if (res.code === 0) {
         message(this, '退课成功')
-        this.loadMyCourses()
+        this.loadMyCourses()   // ✅ 刷新按钮状态
       } else {
         message(this, res.msg)
       }
     },
 
+
     async loadMyCourses() {
-    const store = useAppStore()
-    const userId = store.userInfo.id
+      const studentId = this.store.userInfo.id
+      const res = await getMyCourseListByStudent(studentId)
 
-    if (store.userInfo.role === 'ROLE_STUDENT') {
-      const res = await getMyCourseListByStudent()
-      if (res.code === 0) {
-        this.courseList = res.data
+      console.log('后端返回 res.data =', res.data)
+
+      if (res.code === 0 && Array.isArray(res.data)) {
+        // 核心修复：只取 courseId
+        this.selectedCourseIds = res.data.map(item => Number(item.courseId))
+      } else {
+        this.selectedCourseIds = []
       }
+
+      console.log('selectedCourseIds =', this.selectedCourseIds)
     }
 
-    if (store.userInfo.role === 'ROLE_TEACHER') {
-      const res = await getMyCourseListByTeacher()
-      if (res.code === 0) {
-        this.courseList = res.data
-      }
-    }
+
+
+
+
+
 }
-
-  }
 })
 </script>
+<style scoped>
+/* 基础按钮 */
+.course-btn {
+  width: 64px;
+  height: 32px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  border: 2px solid #333;
+  cursor: pointer;
+  color: #fff;
+}
 
-<style></style>
+/* 选课：红色 */
+.course-btn.course-btn-select {
+  background-color: #8b1e1e;
+}
+
+.course-btn.course-btn-select:hover {
+  background-color: #a62828;
+}
+
+/* 退选：灰色 */
+.course-btn.course-btn-drop {
+  background-color: #909399;
+}
+
+.course-btn.course-btn-drop:hover {
+  background-color: #a6a9ad;
+}
+</style>
