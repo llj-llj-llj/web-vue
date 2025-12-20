@@ -36,8 +36,8 @@
           <td>{{ item.credit }}</td>
           <td>{{ item.coursePath }}</td>
           <td>{{ item.preCourse }}</td>
-          <td>{{ item.courseTime }}</td>
-          <td>{{ item.courseRoom }}</td>
+          <td>{{ item.classTime }}</td>
+          <td>{{ item.location }}</td>
            <!-- 教师 / 管理员操作 -->
           <td v-if="canEditCourse">
             <button class="table_edit_button" @click="editItem(item)">编辑</button>
@@ -178,6 +178,15 @@
             </select>
           </td>
         </tr>
+        <tr>
+          <td colspan="1" style="text-align: right">上课时间</td>
+          <td colspan="1"><input v-model="form.classTime" style="width: 97%" /></td>
+        </tr>
+        <tr>
+          <td colspan="1" style="text-align: right">上课地点</td>
+          <td colspan="1"><input v-model="form.location" style="width: 97%" /></td>
+        </tr>
+      
 
         <tr>
           <td colspan="2">
@@ -199,10 +208,9 @@ import { getDialog } from '~/tools/comMethod'
 import { useAppStore } from '~/stores/app'
 import {
   getMyCourseListByStudent,
-  getMyCourseListByTeacher,
   selectMyCourse,
   dropMyCourse
-} from '~/services/myCourseServ'
+} from '~/services/courseChooseServ'
 
 export default defineComponent({
   data() {
@@ -260,10 +268,15 @@ export default defineComponent({
     },
 
     async query() {
-      this.currentPage = 1
-      this.courseList = await getCourseList(this.numName)
-      this.makeSelectCourseList()
-    },
+    this.currentPage = 1
+    this.courseList = await getCourseList(this.numName)
+    this.makeSelectCourseList()
+
+    if (this.store.userInfo.role === 'ROLE_STUDENT') {
+      this.loadMyCourses()   // 推荐加上
+    }
+  },
+
 
     addItem() {
       this.form = {} as CourseItem
@@ -348,26 +361,22 @@ export default defineComponent({
       }
     },
 
-    async loadMyCourses() {
+   async loadMyCourses() {
     const store = useAppStore()
-    const userId = store.userInfo.id
+    const studentId = store.userInfo.id
 
+    // 学生：只加载“已选课程 ID”
     if (store.userInfo.role === 'ROLE_STUDENT') {
-      const res = await getMyCourseListByStudent()
+      const res = await getMyCourseListByStudent(studentId)
       if (res.code === 0) {
-        this.courseList = res.data
+        this.selectedCourseIds = res.data   // ✅ 正确
       }
     }
 
-    if (store.userInfo.role === 'ROLE_TEACHER') {
-      const res = await getMyCourseListByTeacher()
-      if (res.code === 0) {
-        this.courseList = res.data
-      }
-    }
+  // 教师逻辑可保留或删除（不影响选课）
 }
 
-  }
+}
 })
 </script>
 

@@ -5,12 +5,6 @@
       <div class="base_title">我的课程</div>
     </div>
 
-    <!-- 管理员提示 -->
-    <div v-if="isAdmin" style="color:red;padding:20px">
-      管理员不参与“我的课程”功能
-    </div>
-
-    <!-- 学生 / 教师 -->
     <div v-else class="table_center">
       <table class="content">
         <tr class="table_th">
@@ -26,8 +20,8 @@
           <td>{{ item.num }}</td>
           <td>{{ item.name }}</td>
           <td>{{ item.credit }}</td>
-          <td>{{ item.courseTime }}</td>
-          <td>{{ item.courseRoom }}</td>
+          <td>{{ item.classTime }}</td>
+          <td>{{ item.location }}</td>
 
           <td v-if="isStudent">
             <button class="table_delete_button" @click="drop(item.courseId)">
@@ -64,7 +58,7 @@ import {
   getMyCourseListByStudent,
   getMyCourseListByTeacher,
   dropMyCourse
-} from '~/services/myCourseServ'
+} from '~/services/courseChooseServ'
 import { message, messageConform } from '~/tools/messageBox'
 
 export default defineComponent({

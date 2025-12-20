@@ -140,8 +140,8 @@ export interface CourseItem {
   coursePath: string;
   preCourse: string;
   preCourseId: number;
-  courseTime: string;
-  courseRoom: string;
+  classTime: string;
+  location: string;
 }
 //用于成绩数据信息的定义
 export interface ScoreItem {

@@ -5,7 +5,7 @@ const routes = [
   //当路由为空时，重定向到登录页面
   {
     path: "/",
-    redirect: "/StudentLeave",
+    redirect: "/Login",
   },
   //登录页面
   {
@@ -86,9 +86,9 @@ const routes = [
     component: () => import("~/views/teaching/CourseTable.vue"),
   },
   {
-    path: "/MyCourse",
-    name: "MyCourseTable",
-    component: () => import("~/views/teaching/MyCourseTable.vue"),
+    path: "/CourseChoose",
+    name: "CourseChooseTable",
+    component: () => import("~/views/teaching/CourseChooseTable.vue"),
   },
   {
     path: "/Score",
