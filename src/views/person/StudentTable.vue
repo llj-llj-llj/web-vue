@@ -167,6 +167,7 @@ export default defineComponent({
       const res = await studentDelete(personId);
       if (res.code == 0) {
         message(this, "删除成功");
+        this.getDataPage();
       } else {
         message(this, res.msg);
       }
