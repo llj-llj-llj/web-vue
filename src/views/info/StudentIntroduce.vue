@@ -61,7 +61,7 @@
             {{ info.address }}
           </td>
           <td>
-            <input style="margin-left: 10px" type="file" id="file" accept=".jpg" @change="onFileChange($event)" />
+            <input style="margin-left: 10px" type="file" id="file" accept=".jpg" />
             <input type="button" value="图片上传" @click="uploadFile()" />
           </td>
         </tr>
@@ -146,16 +146,6 @@ export default defineComponent({
   mounted() { },
 
   methods: {
-    onFileChange(e: Event) {
-  const input = e.target as HTMLInputElement;
-  if (!input.files || input.files.length === 0) return;
-
-  const f = input.files[0];
-
-  // 选文件后立刻本地预览
-  this.imgStr = URL.createObjectURL(f);
-},
-
     drawEcharts() {
       // 基于准备好的dom，初始化echarts实例
       let myChartBar = echart.init(
@@ -269,4 +259,4 @@ export default defineComponent({
 #myChartPie {
   float: right;
 }
-</style> 
+</style>

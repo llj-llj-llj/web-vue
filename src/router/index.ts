@@ -86,14 +86,9 @@ const routes = [
     component: () => import("~/views/teaching/CourseTable.vue"),
   },
   {
-    path: "/CourseChoose",
-    name: "CourseChooseTable",
-    component: () => import("~/views/teaching/CourseChooseTable.vue"),
-  },
-  {
-    path: "/TeacherCourse",
-    name: "TeacherCourseTable",
-    component: () => import("~/views/teaching/TeacherCourseTable.vue"),
+    path: "/MyCourse",
+    name: "MyCourseTable",
+    component: () => import("~/views/teaching/MyCourseTable.vue"),
   },
   {
     path: "/Score",

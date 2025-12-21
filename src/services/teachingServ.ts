@@ -96,23 +96,3 @@ export async function generateScoreReport(
   };
   return await downloadPost('/api/teaching/generateScoreReport', fileName, params);
 }
-
-//获取学生最终成绩分析后台数据请求方法
-export async function getStudentFinalScoreAnalysis(personId: number | null = null): Promise<any> {
-  const res = await generalRequest("/api/score/getStudentFinalScoreAnalysis", {
-    personId: personId
-  });
-  return res;
-}
-
-//获取班级最终成绩分析后台数据请求方法
-export async function getClassFinalScoreAnalysis(
-  courseId: number | null = null,
-  examType: string | null = null
-): Promise<any> {
-  const res = await generalRequest("/api/score/getClassFinalScoreAnalysis", {
-    courseId: courseId,
-    examType: examType
-  });
-  return res;
-}
