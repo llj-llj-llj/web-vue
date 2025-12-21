@@ -102,13 +102,17 @@
             <tr class="table_th">
               <td>课程名</td>
               <td>最终成绩</td>
-              <td>单科排名</td>
+              <td>成绩水平</td>
               <td>学分</td>
             </tr>
             <tr v-for="item in studentAnalysis.courseFinalScores" :key="item.courseId">
               <td>{{ item.courseName }}</td>
               <td>{{ item.finalScore.toFixed(2) }}</td>
-              <td>{{ item.courseRanking || '--' }}</td>
+              <td>
+                <span :class="getGradeLevel(item.finalScore).class">
+                  {{ getGradeLevel(item.finalScore).text }}
+                </span>
+              </td>
               <td>{{ item.credit }}</td>
             </tr>
           </table>
@@ -1237,8 +1241,17 @@ export default defineComponent({
       };
     },
     
-
-  },
+    // 获取成绩等级
+    getGradeLevel(mark: number) {
+      if (mark >= 80) {
+        return { text: '优秀', class: 'score-excellent' };
+      } else if (mark >= 60) {
+        return { text: '及格', class: 'score-pass' };
+      } else {
+        return { text: '不及格', class: 'score-fail' };
+      }
+    }
+  }
 });
 </script>
 
