@@ -57,10 +57,24 @@ export interface LeaveSearchParams {
 }
 
 // 获取教师选项列表
+// 获取教师选项列表
 export async function getTeacherItemOptionList(): Promise<TeacherOption[]> {
-  const res = await generalRequest("/api/studentLeave/getTeacherItemOptionList", null);
-  return res.data as TeacherOption[];
+  const res: any = await generalRequest("/api/studentLeave/getTeacherItemOptionList", null);
+
+  // ✅ 兼容：generalRequest 可能返回 raw，也可能返回 axiosResponse
+  const raw = res?.data ?? res;
+
+  // ✅ 你的后端字段叫 itemList，每项叫 title/value
+  const list = Array.isArray(raw?.itemList) ? raw.itemList : [];
+
+  // ✅ 在 service 层直接转成前端真正需要的 {label,value}
+  return list.map((x: any) => ({
+    label: x.title,
+    value: Number(x.value ?? x.id),
+  }));
 }
+
+
 
 // 获取请假列表
 export async function getStudentLeaveList(data: LeaveSearchParams): Promise<LeaveItem[]> {

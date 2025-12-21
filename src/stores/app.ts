@@ -30,17 +30,32 @@ export const useAppStore = defineStore("app", {
   }),
   actions: {
     async login(username: string, password: string): Promise<void> {
-      const res = await userLoginReq(username, password);
-      this.userInfo = {
-        loggedIn: true,
-        username: res.username,
-        perName: res.perName,
-        token: res.token,
-        id: res.id,
-        role: res.role,
-        password: password,
-      };
-    },
+  const res: any = await userLoginReq(username, password);
+
+  // 兼容：后端可能把 personId 放在不同位置
+  const personId =
+    res.personId ??
+    res.id ??
+    res.data?.personId ??
+    res.data?.id ??
+    res.userInfo?.personId ??
+    res.userInfo?.id;
+
+  this.userInfo = {
+    loggedIn: true,
+    username: res.username ?? res.data?.username ?? username,
+    perName: res.perName ?? res.data?.perName ?? "",
+    token: res.token ?? res.data?.token ?? "",
+    id: personId ?? 0,              // 你项目里很多地方用 userInfo.id，当作 personId 用
+    role: res.role ?? res.data?.role ?? "",
+    password: password,
+    // 如果你愿意更清晰，就再存一份：
+    // personId: personId ?? 0,
+  };
+
+  console.log("[store.login] login raw res =", res);
+  console.log("[store.login] resolved personId =", personId);
+},
     logout() {
       this.userInfo = {
         loggedIn: false,

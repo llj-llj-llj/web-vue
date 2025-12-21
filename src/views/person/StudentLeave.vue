@@ -33,31 +33,17 @@
     <div class="base_query_oneLine" style="width: 97%">
       <!-- 左边操作按钮组 -->
       <div class="query_left">
-        <el-button class="commButton" @click="resetForm()">重置</el-button>
-        <el-button class="commButton" type="success" @click="handleExport()" style="margin-left: 10px"
-          >导出数据</el-button
-        >
+          
+
       </div>
       <!-- 右边查询组 -->
       <div class="query_right">
-        <span style="margin-top: 5px">状态</span>
-        <el-select
-          v-model="searchParams.state"
-          placeholder="选择状态"
-          style="width: 120px; margin-left: 10px; margin-right: 10px;"
-        >
-          <el-option v-for="item in stateOptions" :key="item.value" :label="item.label" :value="item.value" />
-        </el-select>
-        <el-input v-model="searchParams.search" placeholder="搜索" style="width: 200px; margin-right: 10px;">
-          <template #append>
-            <el-button @click="loadLeaveList"><el-icon><Search /></el-icon></el-button>
-          </template>
-        </el-input>
-        <el-button class="commButton" @click="loadLeaveList">查询</el-button>
+         
+        
       </div>
     </div>
 
-    <div class="form-div" style="margin-top: 5px">
+    <div class="form-div" style="margin-top: 5px"  v-if="isStudent">
       <el-form :model="form" :rules="rules" ref="formRef" label-position="right" label-width="100px">
         <el-form-item label="学号" prop="studentNum">
           <el-input v-model="form.studentNum" placeholder="请输入学号" style="width: 97%" />
@@ -137,30 +123,11 @@
       </el-form>
     </div>
 
-    <!-- 数据表格区域 -->
-    <div class="table-content" style="margin-top: 20px">
-      <div class="batch-operations" style="margin-bottom: 10px;">
-        <el-button
-          size="small"
-          class="commButton"
-          type="primary"
-          @click="batchApprove"
-          :disabled="selectedRows.length === 0"
-          :loading="loading.batchCheck"
-          >批量批准</el-button
-        >
-        <el-button
-          size="small"
-          class="commButton"
-          type="danger"
-          @click="batchReject"
-          :disabled="selectedRows.length === 0"
-          :loading="loading.batchCheck"
-          >批量拒绝</el-button
-        >
-        <span style="margin-left: 10px; color: #999;">{{ selectedRows.length }} 项已选择</span>
-      </div>
 
+
+
+    <!-- 数据表格区域 -->
+     <div >
       <el-table
         :data="leaveList"
         :header-cell-style="{
@@ -218,27 +185,18 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="教师备注" color="black" align="center" width="150">
-          <template v-slot="scope">
-            {{ scope.row.teacherComment }}
-          </template>
-        </el-table-column>
+        <el-table-column label="  " color="black" align="center" width="200" fixed="right" v-if="isAdmin"></el-table-column>
 
-        <el-table-column label="管理员备注" color="black" align="center" width="150">
+        <el-table-column label="操作" color="black" align="center" width="200" fixed="right" v-if="!isAdmin"
+>
           <template v-slot="scope">
-            {{ scope.row.adminComment }}
-          </template>
-        </el-table-column>
-
-        <el-table-column label="操作" color="black" align="center" width="200" fixed="right">
-          <template v-slot="scope">
-            <el-button size="small" class="commButton" @click="editItem(scope.row)">编辑</el-button>
+            <el-button size="small" class="commButton" @click="editItem(scope.row)" v-if="isStudent">编辑</el-button>
             <el-button
               size="small"
               class="commButton"
               type="primary"
               @click="checkItem(scope.row, 1)"
-              v-if="scope.row.state === 0"
+              v-if="scope.row.state === 0 && isTeacher"
               >批准</el-button
             >
             <el-button
@@ -246,7 +204,7 @@
               class="commButton"
               type="danger"
               @click="checkItem(scope.row, 2)"
-              v-if="scope.row.state === 0"
+              v-if="scope.row.state === 0 && isTeacher"
               >拒绝</el-button
             >
           </template>
@@ -279,7 +237,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { ElMessage } from 'element-plus';
 import type { FormInstance, UploadFile } from 'element-plus';
 import { Search, Plus } from '@element-plus/icons-vue';
@@ -296,6 +254,18 @@ import {
   type LeaveSearchParams,
   type LeaveSaveRequest
 } from '~/services/studentLeaveServ';
+
+import { useAppStore } from '~/stores/app';   // ✅ 加这个
+
+// ✅ 角色判断（和你第二张图那份逻辑一致）
+const appStore = useAppStore();
+
+const isStudent = computed(() => appStore.userInfo.role === 'ROLE_STUDENT');
+const isTeacher = computed(() => appStore.userInfo.role === 'ROLE_TEACHER');
+const isAdmin   = computed(() => appStore.userInfo.role === 'ROLE_ADMIN');
+
+// （可选）有些项目后端也会给 ROLE_TEACHER / ROLE_ADMIN 以外的情况，这里你可以再加个兜底：
+// const isTeacherOrAdmin = computed(() => isTeacher.value || isAdmin.value);
 
 // ========== 响应式变量定义（指定类型） ==========
 
@@ -436,16 +406,18 @@ const isFormValidateError = (error: unknown): boolean => {
 const loadTeacherOptions = async () => {
   loading.value.teacherOptions = true;
   try {
-    const res = await getTeacherItemOptionList();
-    teacherOptions.value = Array.isArray(res) ? res : [];
-  } catch (error) {
-    console.error('加载教师选项失败:', error);
-    ElMessage.error('加载教师选项失败');
+    teacherOptions.value = await getTeacherItemOptionList();
+    console.log("teacherOptions =", teacherOptions.value);
+  } catch (e) {
+    console.error(e);
     teacherOptions.value = [];
   } finally {
     loading.value.teacherOptions = false;
   }
 };
+
+
+
 
 // 加载请假列表
 const loadLeaveList = async () => {

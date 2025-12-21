@@ -39,9 +39,10 @@
         </tr>
         <tr>
           <td>性别</td>
-          <td>
-            {{ info.genderName }}
-          </td>
+            <td>
+              {{ info.gender ?? "" }}
+            </td>
+
           <td>出生日期</td>
           <td>
             {{ info.birthday }}
@@ -82,6 +83,9 @@ import {getTeacherIntroduceData,
   uploadPhoto,
 } from "~/services/infoServ";
 import { message } from "~/tools/messageBox";
+import { ElMessage } from "element-plus";
+
+
 
 export default defineComponent({
   data: () => ({
@@ -89,41 +93,81 @@ export default defineComponent({
   personId: null as number | null,
   imgStr: "",
   }),
-  async created() {
-    let res = await getTeacherIntroduceData(this.personId);
-    const raw: TeacherItem = res.data.info;
-    this.info = {
-    ...raw.person,
-    title: raw.title,
-    degree: raw.degree,
-    personId: raw.personId, // 保证一致
+async created() {
+  const pid = Number(this.$route.query.personId);
+  if (!pid) {
+    ElMessage.error("缺少人员ID，无法加载教师信息");
+    return;
+  }
+
+  this.personId = pid;
+
+  // ⚠️ generalRequest 返回的就是 DataResponse
+  const res = await getTeacherIntroduceData(this.personId);
+
+  // ✅ 正确取法
+  const payload = res.data;
+  if (!payload) {
+    ElMessage.error("教师信息不存在");
+    return;
+  }
+
+  const person = payload.person;
+  if (!person) {
+    ElMessage.error("教师信息不存在");
+    return;
+  }
+
+  this.info = {
+    ...person,
+    title: payload.title,
+    degree: payload.degree,
+    personId: payload.personId,
   };
-    this.personId = this.info.personId;
-    res = await getPhotoImageStr("photo/" + this.info.personId + ".jpg");
-    this.imgStr = res.data;
-  },
+
+  // 加载头像
+  const imgRes = await getPhotoImageStr(`photo/${this.personId}.jpg`);
+  this.imgStr = imgRes.data;
+},
+
+
+
   mounted() { },
 
   methods: {
 
     // 上传图片
-    async uploadFile() {
-      const file = document.querySelector("#file") as any;
-      if (file.files == null || file.files.length == 0) {
-        message(this, "请选择文件！");
-        return;
-      }
-      const res = await uploadPhoto(
-        "photo/" + this.info.personId + ".jpg",
-        file.files[0]
-      );
+    // 上传图片
+async uploadFile() {
+  const fileInput = document.querySelector("#file") as HTMLInputElement;
 
-      if (res.code === 0) {
-        message(this, "上传成功");
-      } else {
-        message(this, "上传失败");
-      }
-    },
+  if (!fileInput.files || fileInput.files.length === 0) {
+    message(this, "请选择文件！");
+    return;
+  }
+
+  const file = fileInput.files[0];
+
+  // 1) 上传
+  const res = await uploadPhoto(`photo/${this.personId}.jpg`, file);
+
+  if (res.code === 0) {
+    message(this, "上传成功");
+
+    // 2) 上传成功后立刻重新拉取图片（加时间戳防缓存）
+    const imgRes = await getPhotoImageStr(
+      `photo/${this.personId}.jpg?t=${Date.now()}`
+    );
+    this.imgStr = imgRes.data;
+
+    // 3) 可选：清空 input，方便下次选同一张也能触发 change
+    fileInput.value = "";
+  } else {
+    message(this, "上传失败");
+  }
+},
+
+
     // 下载pdf
     downloadPdf() {
       const res = downloadPost(

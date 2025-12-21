@@ -389,39 +389,42 @@ export default defineComponent({
     },
     //登录请求后台服务，将用户登录信息发送到后台，后台验证用户信息，返回jwt
     async loginSubmit() {
-      const res = await testValidateInfo({
-        validateCodeId: this.id,
-        validateCode: this.valiCode,
-      });
-      if (res.code != 0) {
-        message(this, res.msg);
-        this.changeValiCode();
-        return;
-      }
-      if (this.username == "" || this.username == undefined) {
-        message(this, "用户名为空");
-      } else if (this.password == "" || this.password == undefined) {
-        message(this, "密码为空");
-      } else {
-        const store = useAppStore();
-        try {
-          //登录成功后，将用户信息保存到store中，将用户信息保存到浏览器中
-          await store.login(this.username, this.password);
-          await store.setNavi();
-          if (this.remember) {
-            store.saveAccount(
-              Base64.encode(this.username),
-              Base64.encode(this.password)
-            );
-          } else {
-            store.removeAccount();
-          }
-          router.push({ path: "/MainPage" });
-        } catch (err) {
-          message(this, "登录失败!");
-        }
-      }
-    },
+  const verifyRes = await testValidateInfo({
+    validateCodeId: this.id,
+    validateCode: this.valiCode,
+  });
+  if (verifyRes.code != 0) {
+    message(this, verifyRes.msg);
+    this.changeValiCode();
+    return;
+  }
+
+  if (!this.username) return message(this, "用户名为空");
+  if (!this.password) return message(this, "密码为空");
+
+  const store = useAppStore();
+  try {
+    const loginRes: any = await store.login(this.username, this.password);
+
+    // ✅ 你想打印就打印
+    console.log("[login] loginRes =", loginRes);
+    console.log("[login] localStorage personId =", localStorage.getItem("personId"));
+    console.log("[login] localStorage token =", localStorage.getItem("token"));
+
+    await store.setNavi();
+
+    if (this.remember) {
+      store.saveAccount(Base64.encode(this.username), Base64.encode(this.password));
+    } else {
+      store.removeAccount();
+    }
+
+    router.push({ path: "/MainPage" });
+  } catch (err) {
+    message(this, "登录失败!");
+  }
+}
+
   },
 });
 </script>
